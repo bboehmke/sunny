@@ -213,6 +213,7 @@ type DeviceData struct {
 	Parameters []uint32
 
 	ResponseValues []ResponseValue
+	Data           []byte
 }
 
 func (d DeviceData) ProtocolID() uint16 {
@@ -222,7 +223,11 @@ func (d *DeviceData) Bytes() []byte {
 	var buffer bytes.Buffer
 	b := make([]byte, 4)
 
-	buffer.WriteByte(uint8((28 + len(d.Parameters)*4) / 4))
+	if d.Data == nil {
+		buffer.WriteByte(uint8((28 + len(d.Parameters)*4) / 4))
+	} else {
+		buffer.WriteByte(uint8((28 + len(d.Parameters)*4 + len(d.Data)) / 4))
+	}
 
 	buffer.WriteByte(d.Control)
 
@@ -254,6 +259,10 @@ func (d *DeviceData) Bytes() []byte {
 	for _, param := range d.Parameters {
 		binary.LittleEndian.PutUint32(b, param)
 		buffer.Write(b[:4])
+	}
+
+	if d.Data != nil {
+		buffer.Write(d.Data)
 	}
 
 	return buffer.Bytes()
@@ -325,8 +334,15 @@ func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 				if buffer.Len() < 4 {
 					break
 				}
-				responseValue.Values = append(responseValue.Values,
-					binary.LittleEndian.Uint32(buffer.Next(4)))
+
+				val := binary.LittleEndian.Uint32(buffer.Next(4))
+
+				if val == 0xfffffe {
+					break
+				}
+				if val>>24 == 1 {
+					responseValue.Values = append(responseValue.Values, val&0xffffff)
+				}
 			}
 
 		} else if p.Object == 0x5400 {
@@ -341,8 +357,14 @@ func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 				if buffer.Len() < 4 {
 					break
 				}
-				responseValue.Values = append(responseValue.Values,
-					binary.LittleEndian.Uint32(buffer.Next(4)))
+
+				val := binary.LittleEndian.Uint32(buffer.Next(4))
+
+				if val == 0xffffffff {
+					break
+				}
+
+				responseValue.Values = append(responseValue.Values, val)
 			}
 
 		} else if responseValue.Type == 0x40 {
@@ -350,10 +372,17 @@ func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 				if buffer.Len() < 4 {
 					break
 				}
-				responseValue.Values = append(responseValue.Values,
-					int32(binary.LittleEndian.Uint32(buffer.Next(4))))
+
+				val := int32(binary.LittleEndian.Uint32(buffer.Next(4)))
+
+				if val == -0x80000000 {
+					break
+				}
+
+				responseValue.Values = append(responseValue.Values, val)
 			}
 		}
+		p.ResponseValues = append(p.ResponseValues, responseValue)
 	}
 
 	return &p, nil

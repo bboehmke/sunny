@@ -86,9 +86,125 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 		}
 
 		return packet.GetValues(), nil
+	} else {
+		err := d.login()
+		if err != nil {
+			return nil, err
+		}
+
+		values := make(map[string]interface{})
+		for _, def := range getAllRequests() {
+			vals, err := d.requestValues(def)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range vals {
+				values[key] = value
+			}
+		}
+
+		//values, err := d.requestValues(getRequest("device_class"))
+
+		_ = d.logout()
+
+		return values, nil
 	}
 
 	return nil, nil
+}
+
+func (d *Device) login() error {
+	loginData := proto.NewDeviceData(0xa0)
+	loginData.Command = 0x0c
+	loginData.Object = 0xfffd
+	loginData.JobNumber = 0x01
+
+	loginData.AddParameter(7) // 10 for installer
+	loginData.AddParameter(0x0384)
+	loginData.AddParameter(uint32(time.Now().Unix()))
+	loginData.AddParameter(0)
+
+	// "encrypt" user password
+	pass := []byte(d.password)
+	encryptKey := byte(0x88) // 0xBB for installer
+
+	passwordData := make([]byte, 12)
+	for i := 0; i < 12; i++ {
+		if i < len(pass) {
+			passwordData[i] = pass[i] + encryptKey
+		} else {
+			passwordData[i] = encryptKey
+		}
+	}
+	loginData.Data = passwordData
+
+	response, err := d.sendDeviceDataResponse(loginData, time.Second)
+	if err != nil {
+		return fmt.Errorf("login failed: %v", err)
+	}
+
+	if response.Status != 0 {
+		return fmt.Errorf("login failed")
+	}
+	return nil
+}
+func (d *Device) logout() error {
+	request := proto.NewDeviceData(0xa0)
+	request.Command = 0x0e
+	request.Object = 0xfffd
+	request.JobNumber = 0x03
+
+	request.AddParameter(0xFFFFFFFF)
+
+	return d.sendDeviceData(request)
+}
+
+func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
+	request := proto.NewDeviceData(0xa0)
+	request.Object = def.Object
+	request.AddParameter(def.Start)
+	request.AddParameter(def.End)
+
+	response, err := d.sendDeviceDataResponse(request, time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Status != 0 {
+		return nil, fmt.Errorf("failed to get values")
+	}
+
+	return parseValues(response.ResponseValues), nil
+}
+
+func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
+	timeout time.Duration) (*proto.DeviceData, error) {
+
+	err := d.sendDeviceData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		entry, err := d.readNet2(timeout)
+		if err != nil {
+			continue // no valid packet
+		}
+
+		responseData, ok := entry.Content.(*proto.DeviceData)
+		if !ok {
+			continue // no device data packet
+		}
+
+		if responseData.PacketID != data.PacketID {
+			continue // no response to request
+		}
+
+		return responseData, nil
+	}
+
+	return nil, fmt.Errorf("no packet received in timeout")
 }
 
 func (d *Device) sendDeviceData(data *proto.DeviceData) error {
