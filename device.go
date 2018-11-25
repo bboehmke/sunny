@@ -98,19 +98,18 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+			if vals == nil {
+				continue
+			}
 			for key, value := range vals {
 				values[key] = value
 			}
 		}
 
-		//values, err := d.requestValues(getRequest("device_class"))
-
 		_ = d.logout()
 
 		return values, nil
 	}
-
-	return nil, nil
 }
 
 func (d *Device) login() error {
@@ -170,6 +169,9 @@ func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	if response.Status == 0x15 {
+		return nil, nil
+	}
 	if response.Status != 0 {
 		return nil, fmt.Errorf("failed to get values")
 	}
