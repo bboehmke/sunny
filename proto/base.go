@@ -13,6 +13,7 @@ var packets = []ReadPacketEntry{
 
 	&SmaNet2PacketEntry{},
 
+	&DiscoveryRequestPacketEntry{},
 	&DiscoveryIpPacketEntry{},
 }
 

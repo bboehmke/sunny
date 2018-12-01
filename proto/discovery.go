@@ -2,8 +2,6 @@ package proto
 
 import (
 	"net"
-
-	"github.com/sirupsen/logrus"
 )
 
 func NewDiscoveryRequest() *Packet {
@@ -43,7 +41,6 @@ func (e *DiscoveryIpPacketEntry) Bytes() []byte {
 	return e.IP
 }
 func (e *DiscoveryIpPacketEntry) Read(data []byte) (PacketEntry, error) {
-	logrus.Debug(data)
 	return &DiscoveryIpPacketEntry{
 		IP: data,
 	}, nil

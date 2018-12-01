@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Sunny Monitor</title>
+    <script type="text/javascript">
+        window.onload = function () {
+            let svgElement = document.getElementById("monitor_svg");
+            let svg = svgElement.contentDocument;
+
+            let ws;
+            connect();
+
+            function connect() {
+                ws = new WebSocket("ws://" + document.location.host + "/ws");
+                ws.onmessage = handle_message;
+                ws.onclose = function(){
+                    console.log("Try to reconnect");
+                    // Try to reconnect in 5 seconds
+                    setTimeout(connect, 5000);
+                };
+            }
+
+            // SVG functions
+            function svg_show(id) {
+                svg.getElementById(id).setAttribute("visibility", "visible");
+            }
+            function svg_hide(id) {
+                svg.getElementById(id).setAttribute("visibility", "hidden");
+            }
+            function svg_set_width(id, w) {
+                svg.getElementById(id).setAttribute("width", w);
+            }
+            function svg_set_height(id, h) {
+                svg.getElementById(id).setAttribute("height", h);
+            }
+            function svg_set_text(id, value) {
+                svg.getElementById(id).innerHTML = value;
+            }
+
+            // prepare SVG
+            svg_hide("transfer_solar_to_supplier");
+            svg_hide("transfer_solar_to_home");
+            svg_hide("transfer_solar_to_battery");
+            svg_hide("transfer_battery_to_home");
+            svg_hide("transfer_supplier_to_home");
+
+            svg_hide("solar_green");
+            svg_hide("supplier_green");
+            svg_hide("supplier_red");
+            svg_hide("battery_green");
+
+            svg_set_width("home_green", 0);
+            svg_set_width("home_red", 0);
+            svg_set_height("battery_charge_img", 0);
+
+            svg_set_text("solar_power", "0");
+            svg_set_text("supplier_power", "0");
+            svg_set_text("home_power", "0");
+            svg_set_text("battery_power", "0");
+            svg_set_text("battery_charge", "0");
+
+
+            function handle_message(evt) {
+                let data = JSON.parse(evt.data);
+
+                // solar
+                svg_set_text("solar_power", data.solar_power.toLocaleString());
+                if (data.solar_power > 0) {
+                    svg_show("solar_green");
+                } else {
+                    svg_hide("solar_green");
+                }
+
+                if (data.solar_power > 0 && data.home_power > 0) {
+                    svg_show("transfer_solar_to_home");
+                } else {
+                    svg_hide("transfer_solar_to_home");
+                }
+
+                // battery
+                svg_set_text("battery_power", data.battery_power.toLocaleString());
+                svg_set_text("battery_charge", data.battery_charge.toLocaleString());
+                svg_set_height("battery_charge_img", data.battery_charge);
+                if (data.battery_charge > 0 || data.battery_power !== 0) {
+                    svg_show("battery_green");
+                } else {
+                    svg_hide("battery_green");
+                }
+
+                if (data.battery_power < 0) {
+                    svg_show("transfer_solar_to_battery");
+                    svg_hide("transfer_battery_to_home");
+                } else if (data.battery_power > 0) {
+                    svg_hide("transfer_solar_to_battery");
+                    svg_show("transfer_battery_to_home");
+                } else {
+                    svg_hide("transfer_solar_to_battery");
+                    svg_hide("transfer_battery_to_home");
+                }
+
+                // supplier
+                svg_set_text("supplier_power", data.supplier_power.toLocaleString());
+                if (data.supplier_power > 10) {
+                    svg_hide("supplier_green");
+                    svg_show("supplier_red");
+
+                    svg_show("transfer_supplier_to_home");
+                    svg_hide("transfer_solar_to_supplier");
+                } else if (data.supplier_power < -10) {
+                    svg_show("supplier_green");
+                    svg_hide("supplier_red");
+
+                    svg_hide("transfer_supplier_to_home");
+                    svg_show("transfer_solar_to_supplier");
+                } else {
+                    svg_hide("supplier_green");
+                    svg_hide("supplier_red");
+
+                    svg_hide("transfer_supplier_to_home");
+                    svg_hide("transfer_solar_to_supplier");
+                }
+
+                // home
+                svg_set_text("home_power", data.home_power.toLocaleString());
+                svg_set_width("home_green", data.home_own_power/data.home_power);
+                svg_set_width("home_red", data.home_supplier_power/data.home_power);
+            }
+        };
+    </script>
+</head>
+<body>
+<div >
+    <object id="monitor_svg" data="status_img.svg" type="image/svg+xml"
+            style="max-height: 98vh; max-width: 98vw;"></object>
+</div>
+</body>
+</html>

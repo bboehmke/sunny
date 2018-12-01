@@ -69,6 +69,31 @@ func NewDevice(address, password string) (*Device, error) {
 	return &device, nil
 }
 
+func (d *Device) GetDeviceClass() (uint32, error) {
+	if d.energyMeter {
+		return 1, nil
+	}
+
+	err := d.login()
+	if err != nil {
+		return 0, err
+	}
+
+	vals, err := d.requestValues(getRequest("device_class"))
+	if err != nil {
+		return 0, err
+	}
+
+	// clear queue -> get fresh data
+	d.conn.clearReceived(d.address)
+
+	_ = d.logout()
+	if val, ok := vals["device_class"]; ok {
+		return val.(uint32), nil
+	}
+	return 0, fmt.Errorf("")
+}
+
 func (d *Device) GetValues() (map[string]interface{}, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
