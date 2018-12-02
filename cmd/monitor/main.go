@@ -121,6 +121,22 @@ func (s *MonitorService) update() {
 	s.state = state
 }
 
+func getEnv(key, def string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return def
+}
+
+func getDeviceFromEnv(key, password string) (*sunny.Device, error) {
+	address, ok := os.LookupEnv(key)
+	if !ok {
+		return nil, nil
+	}
+
+	return sunny.NewDevice(address, password)
+}
+
 func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
@@ -135,12 +151,29 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	devices, err := sunny.DiscoverDevices("0000")
+	password := getEnv("PASSWORD", "0000")
+
+	service := MonitorService{}
+	var err error
+
+	service.SolarInverter, err = getDeviceFromEnv("SOLAR_INVERTER", password)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	service.BatteryInverter, err = getDeviceFromEnv("BATTERY_INVERTER", password)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	service.EnergyMeter, err = getDeviceFromEnv("ENERGY_METER", password)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	service := MonitorService{}
+	devices, err := sunny.DiscoverDevices(password)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
 	for _, dev := range devices {
 		deviceClass, err := dev.GetDeviceClass()
 		if err != nil {
@@ -149,13 +182,19 @@ func main() {
 
 		switch deviceClass {
 		case 1: // energy meter
-			service.EnergyMeter = dev
+			if service.EnergyMeter == nil {
+				service.EnergyMeter = dev
+			}
 
 		case 8001: // solar
-			service.SolarInverter = dev
+			if service.SolarInverter == nil {
+				service.SolarInverter = dev
+			}
 
 		case 8007: // battery
-			service.BatteryInverter = dev
+			if service.BatteryInverter == nil {
+				service.BatteryInverter = dev
+			}
 
 		default:
 			logrus.Warningf("Unknown device class %d", deviceClass)
