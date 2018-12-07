@@ -4,6 +4,7 @@ import (
 	"net"
 )
 
+// NewDiscoveryRequest creates a new discovery request packet
 func NewDiscoveryRequest() *Packet {
 	var pack Packet
 	pack.AddEntry(&GroupPacketEntry{
@@ -13,35 +14,49 @@ func NewDiscoveryRequest() *Packet {
 	return &pack
 }
 
+// DiscoveryRequestPacketEntryTag identifier for discovery request entries
 const DiscoveryRequestPacketEntryTag = 0x0020
 
+// DiscoveryRequestPacketEntry empty packet
 type DiscoveryRequestPacketEntry struct {
 }
 
+// Tag returns entry identifier
 func (e DiscoveryRequestPacketEntry) Tag() uint16 {
 	return DiscoveryRequestPacketEntryTag
 }
+
+// Bytes returns binary data
 func (e *DiscoveryRequestPacketEntry) Bytes() []byte {
 	return []byte{}
 }
+
+// Read packet from the given binary data
 func (e *DiscoveryRequestPacketEntry) Read(data []byte) (PacketEntry, error) {
 	return &DiscoveryRequestPacketEntry{}, nil
 }
 
-const DiscoveryIpPacketEntryTag = 0x0030
+// DiscoveryIPPacketEntryTag identifier for discovery IP entries
+const DiscoveryIPPacketEntryTag = 0x0030
 
-type DiscoveryIpPacketEntry struct {
+// DiscoveryIPPacketEntry with IP address of device
+type DiscoveryIPPacketEntry struct {
 	IP net.IP
 }
 
-func (e DiscoveryIpPacketEntry) Tag() uint16 {
-	return DiscoveryIpPacketEntryTag
+// Tag returns entry identifier
+func (e DiscoveryIPPacketEntry) Tag() uint16 {
+	return DiscoveryIPPacketEntryTag
 }
-func (e *DiscoveryIpPacketEntry) Bytes() []byte {
+
+// Bytes returns binary data
+func (e *DiscoveryIPPacketEntry) Bytes() []byte {
 	return e.IP
 }
-func (e *DiscoveryIpPacketEntry) Read(data []byte) (PacketEntry, error) {
-	return &DiscoveryIpPacketEntry{
+
+// Read packet from the given binary data
+func (e *DiscoveryIPPacketEntry) Read(data []byte) (PacketEntry, error) {
+	return &DiscoveryIPPacketEntry{
 		IP: data,
 	}, nil
 }

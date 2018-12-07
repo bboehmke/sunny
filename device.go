@@ -8,10 +8,14 @@ import (
 	"gitlab.com/bboehmke/sunny/proto"
 )
 
+// Device instance for communication with inverter and energy meter
 type Device struct {
-	address  *net.UDPAddr
+	// Address of inverter or energy meter
+	address *net.UDPAddr
+	// password for inverter communication
 	password string
 
+	// connection instance for communication
 	conn *connection
 
 	// device information
@@ -20,6 +24,7 @@ type Device struct {
 	serialNumber uint32
 }
 
+// NewDevice creates a new device instance
 func NewDevice(address, password string) (*Device, error) {
 	device := Device{
 		password: password,
@@ -31,13 +36,16 @@ func NewDevice(address, password string) (*Device, error) {
 		return nil, fmt.Errorf("failed to resolve udp address: %v", err)
 	}
 
-	device.conn, err = getConnection(device.address)
+	// get connection instance
+	device.conn, err = getConnection()
 	if err != nil {
 		return nil, err
 	}
 
+	// clear message buffer
 	conn.clearReceived(device.address)
 
+	// send ping
 	pingData := proto.NewDeviceData(0xa0)
 	pingData.AddParameter(0)
 	pingData.AddParameter(0)
@@ -46,6 +54,7 @@ func NewDevice(address, password string) (*Device, error) {
 		return nil, err
 	}
 
+	// wait for receive
 	net2Entry, err := device.readNet2(time.Second)
 	if err != nil {
 		return nil, err
@@ -63,12 +72,12 @@ func NewDevice(address, password string) (*Device, error) {
 
 	default:
 		return nil, fmt.Errorf("received unknown net2 packet from %s", address)
-
 	}
 
 	return &device, nil
 }
 
+// GetDeviceClass returns the class identifier of the device (1 = energy meter)
 func (d *Device) GetDeviceClass() (uint32, error) {
 	if d.energyMeter {
 		return 1, nil
@@ -79,7 +88,7 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 		return 0, err
 	}
 
-	vals, err := d.requestValues(getRequest("device_class"))
+	values, err := d.requestValues(getRequest("device_class"))
 	if err != nil {
 		return 0, err
 	}
@@ -87,13 +96,14 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
 
-	_ = d.logout()
-	if val, ok := vals["device_class"]; ok {
+	d.logout()
+	if val, ok := values["device_class"]; ok {
 		return val.(uint32), nil
 	}
 	return 0, fmt.Errorf("")
 }
 
+// GetValues from device
 func (d *Device) GetValues() (map[string]interface{}, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
@@ -111,32 +121,36 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 		}
 
 		return packet.GetValues(), nil
-	} else {
-		err := d.login()
+	}
+
+	// login to device
+	err := d.login()
+	if err != nil {
+		return nil, err
+	}
+
+	// request all values and join to one map
+	valuesMap := make(map[string]interface{})
+	for _, def := range getAllRequests() {
+		values, err := d.requestValues(def)
 		if err != nil {
 			return nil, err
 		}
-
-		values := make(map[string]interface{})
-		for _, def := range getAllRequests() {
-			vals, err := d.requestValues(def)
-			if err != nil {
-				return nil, err
-			}
-			if vals == nil {
-				continue
-			}
-			for key, value := range vals {
-				values[key] = value
-			}
+		if values == nil {
+			continue
 		}
-
-		_ = d.logout()
-
-		return values, nil
+		for key, value := range values {
+			valuesMap[key] = value
+		}
 	}
+
+	// logout
+	d.logout()
+
+	return valuesMap, nil
 }
 
+// login to device
 func (d *Device) login() error {
 	loginData := proto.NewDeviceData(0xa0)
 	loginData.Command = 0x0c
@@ -172,7 +186,9 @@ func (d *Device) login() error {
 	}
 	return nil
 }
-func (d *Device) logout() error {
+
+// logout to device
+func (d *Device) logout() {
 	request := proto.NewDeviceData(0xa0)
 	request.Command = 0x0e
 	request.Object = 0xfffd
@@ -180,9 +196,10 @@ func (d *Device) logout() error {
 
 	request.AddParameter(0xFFFFFFFF)
 
-	return d.sendDeviceData(request)
+	_ = d.sendDeviceData(request)
 }
 
+// requestValues from given definition
 func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
 	request := proto.NewDeviceData(0xa0)
 	request.Object = def.Object
@@ -204,6 +221,7 @@ func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
 	return parseValues(response.ResponseValues), nil
 }
 
+// sendDeviceDataResponse sends the package and wait for response
 func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
 	timeout time.Duration) (*proto.DeviceData, error) {
 
@@ -234,6 +252,7 @@ func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
 	return nil, fmt.Errorf("no packet received in timeout")
 }
 
+// sendDeviceData sends the package
 func (d *Device) sendDeviceData(data *proto.DeviceData) error {
 	if d.susyID == 0 && d.serialNumber == 0 {
 		data.DstSusyID = 0xFFFF
@@ -253,8 +272,9 @@ func (d *Device) sendDeviceData(data *proto.DeviceData) error {
 
 	return conn.sendPacket(d.address, &pack)
 }
-func (d *Device) readNet2(timeout time.Duration) (*proto.SmaNet2PacketEntry, error) {
 
+// readNet2 read package from connection
+func (d *Device) readNet2(timeout time.Duration) (*proto.SmaNet2PacketEntry, error) {
 	packet := d.conn.readPacket(d.address, timeout)
 	if packet == nil {
 		return nil, fmt.Errorf("device does not respond at %s", d.address.IP.String())

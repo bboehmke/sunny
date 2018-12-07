@@ -18,6 +18,7 @@ import (
 
 var websocketUpgrader = websocket.Upgrader{}
 
+// SolarState contains current inverter and energy meter values
 type SolarState struct {
 	// >0 - Solar production
 	SolarPower int32 `json:"solar_power"`
@@ -33,6 +34,7 @@ type SolarState struct {
 	BatteryCharge uint32 `json:"battery_charge"`
 }
 
+// MonitorService for updating the actual solar state
 type MonitorService struct {
 	sync.RWMutex
 

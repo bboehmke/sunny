@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 )
 
 var smaNet2subPackets = []SmaNet2SubPacket{
@@ -11,26 +12,37 @@ var smaNet2subPackets = []SmaNet2SubPacket{
 	&DeviceData{},
 }
 
+// SmaNet2SubPacket inside net2 entry
 type SmaNet2SubPacket interface {
+	// ProtocolID identifies packet type
 	ProtocolID() uint16
+	// Bytes returns binary data
 	Bytes() []byte
+	// Read packet from the given binary data
 	Read(data []byte) (SmaNet2SubPacket, error)
 }
 
+// SmaNet2PacketEntryTag identifier for net2 entries
 const SmaNet2PacketEntryTag = 0x0010
 
+// SmaNet2PacketEntry with a content packet
 type SmaNet2PacketEntry struct {
 	Content SmaNet2SubPacket
 }
 
+// Tag returns entry identifier
 func (e SmaNet2PacketEntry) Tag() uint16 {
 	return SmaNet2PacketEntryTag
 }
+
+// Bytes returns binary data
 func (e *SmaNet2PacketEntry) Bytes() []byte {
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, e.Content.ProtocolID())
 	return append(b, e.Content.Bytes()...)
 }
+
+// Read packet from the given binary data
 func (e *SmaNet2PacketEntry) Read(data []byte) (PacketEntry, error) {
 	err := checkLen(data, 2)
 	if err != nil {
@@ -54,9 +66,9 @@ func (e *SmaNet2PacketEntry) Read(data []byte) (PacketEntry, error) {
 	return &SmaNet2PacketEntry{
 		Content: nil,
 	}, nil
-	//return nil, fmt.Errorf("invalid protocol id: %d", protoID)
 }
 
+// OBISIdentifier for values
 type OBISIdentifier struct {
 	Channel          uint8
 	MeasurementValue uint8
@@ -64,6 +76,7 @@ type OBISIdentifier struct {
 	Tariff           uint8
 }
 
+// Bytes returns binary data
 func (o *OBISIdentifier) Bytes() []byte {
 	b := make([]byte, 4)
 	b[0] = o.Channel
@@ -72,16 +85,20 @@ func (o *OBISIdentifier) Bytes() []byte {
 	b[3] = o.Tariff
 	return b
 }
+
+// String representation of identifier
 func (o OBISIdentifier) String() string {
 	return fmt.Sprintf("%d:%d.%d.%d",
 		o.Channel, o.MeasurementValue, o.MeasurementType, o.Tariff)
 }
 
+// MeasuredData received from energy meter
 type MeasuredData struct {
 	OBIS  OBISIdentifier
 	Value uint64
 }
 
+// Bytes returns binary data
 func (e *MeasuredData) Bytes() []byte {
 	var b []byte
 	if e.OBIS.MeasurementType == 8 {
@@ -95,6 +112,7 @@ func (e *MeasuredData) Bytes() []byte {
 	return append(e.OBIS.Bytes(), b...)
 }
 
+// EnergyMeterPacket contains response of an energy meter
 type EnergyMeterPacket struct {
 	// energy meter identifier
 	SusyID uint16
@@ -106,9 +124,12 @@ type EnergyMeterPacket struct {
 	Values []MeasuredData
 }
 
+// ProtocolID identifies packet type
 func (e EnergyMeterPacket) ProtocolID() uint16 {
 	return 0x6069
 }
+
+// Bytes returns binary data
 func (e *EnergyMeterPacket) Bytes() []byte {
 	var buffer bytes.Buffer
 	b := make([]byte, 4)
@@ -125,6 +146,8 @@ func (e *EnergyMeterPacket) Bytes() []byte {
 	}
 	return buffer.Bytes()
 }
+
+// Read packet from the given binary data
 func (e *EnergyMeterPacket) Read(data []byte) (SmaNet2SubPacket, error) {
 	err := checkLen(data, 18)
 	if err != nil {
@@ -158,6 +181,8 @@ func (e *EnergyMeterPacket) Read(data []byte) (SmaNet2SubPacket, error) {
 
 	return &p, nil
 }
+
+// GetValues as list from packet
 func (e *EnergyMeterPacket) GetValues() map[string]interface{} {
 	values := make(map[string]interface{}, len(e.Values))
 	for _, v := range e.Values {
@@ -166,6 +191,7 @@ func (e *EnergyMeterPacket) GetValues() map[string]interface{} {
 	return values
 }
 
+// ResponseValue of device data packet response
 type ResponseValue struct {
 	Class     uint8
 	Code      uint16
@@ -175,25 +201,52 @@ type ResponseValue struct {
 	Values []interface{}
 }
 
-var packetIdCounter uint8
+// counter for packet id - increased on every packet
+var packetIDCounter uint8
 
+// more or less unique ID of the current system
+var systemID uint32
+
+// NewDeviceData creates a device data request
 func NewDeviceData(control uint8) *DeviceData {
-	packetIdCounter++
+	packetIDCounter++
+
+	// initialize system id on first call
+	if systemID == 0 {
+		interfaces, err := net.InterfaceAddrs()
+		if err != nil {
+			// fallback to static one
+			systemID = 954830016
+		}
+		for _, inf := range interfaces {
+			network, ok := inf.(*net.IPNet)
+
+			if ok && !network.IP.IsLoopback() && network.IP.To4() != nil {
+				systemID = binary.BigEndian.Uint32(network.IP.To4())
+				break
+			}
+		}
+		if systemID == 0 {
+			// fallback to static one
+			systemID = 954830016
+		}
+	}
 
 	return &DeviceData{
 		Control: control,
 
 		// sunny explorer values
 		SrcSusyID:       120,
-		SrcSerialNumber: 954830016,
+		SrcSerialNumber: systemID, //954830016,
 
-		PacketID: uint16(packetIdCounter),
+		PacketID: uint16(packetIDCounter),
 
 		Parameters:     make([]uint32, 0),
 		ResponseValues: make([]ResponseValue, 0),
 	}
 }
 
+// DeviceData sub packet
 type DeviceData struct {
 	Control uint8
 
@@ -212,13 +265,19 @@ type DeviceData struct {
 
 	Parameters []uint32
 
+	// used for responses
 	ResponseValues []ResponseValue
-	Data           []byte
+
+	// used for requests
+	Data []byte
 }
 
+// ProtocolID identifies packet type
 func (d DeviceData) ProtocolID() uint16 {
 	return 0x6065
 }
+
+// Bytes returns binary data
 func (d *DeviceData) Bytes() []byte {
 	var buffer bytes.Buffer
 	b := make([]byte, 4)
@@ -267,6 +326,8 @@ func (d *DeviceData) Bytes() []byte {
 
 	return buffer.Bytes()
 }
+
+// Read packet from the given binary data
 func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 	err := checkLen(data, 30)
 	if err != nil {
@@ -307,6 +368,7 @@ func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 	parameterCount := int(buffer.Next(1)[0])
 	p.Object = binary.LittleEndian.Uint16(buffer.Next(2))
 
+	// parse parameters
 	for i := 0; i < parameterCount; i++ {
 		p.Parameters = append(p.Parameters,
 			binary.LittleEndian.Uint32(buffer.Next(4)))
@@ -317,76 +379,87 @@ func (d *DeviceData) Read(data []byte) (SmaNet2SubPacket, error) {
 		return &p, nil
 	}
 
+	// parse values
 	for buffer.Len() > 8 {
-		responseValue := ResponseValue{
-			Class:     uint8(buffer.Next(1)[0]),
-			Code:      binary.LittleEndian.Uint16(buffer.Next(2)),
-			Type:      uint8(buffer.Next(1)[0]),
-			Timestamp: binary.LittleEndian.Uint32(buffer.Next(4)),
+		value := parseValue(buffer, p.Object)
+		if value != nil {
+			p.ResponseValues = append(p.ResponseValues, *value)
 		}
-
-		if responseValue.Type == 0x10 {
-			responseValue.Values = append(responseValue.Values,
-				string(buffer.Next(32)))
-
-		} else if responseValue.Type == 0x08 {
-			for i := 0; i < 8; i++ {
-				if buffer.Len() < 4 {
-					break
-				}
-
-				val := binary.LittleEndian.Uint32(buffer.Next(4))
-
-				if val == 0xfffffe {
-					break
-				}
-				if val>>24 == 1 {
-					responseValue.Values = append(responseValue.Values, val&0xffffff)
-				}
-			}
-
-		} else if p.Object == 0x5400 {
-			if buffer.Len() < 8 {
-				break
-			}
-			responseValue.Values = append(responseValue.Values,
-				binary.LittleEndian.Uint64(buffer.Next(8)))
-
-		} else if responseValue.Type == 0x00 {
-			for i := 0; i < 5; i++ {
-				if buffer.Len() < 4 {
-					break
-				}
-
-				val := binary.LittleEndian.Uint32(buffer.Next(4))
-
-				if val == 0xffffffff {
-					break
-				}
-
-				responseValue.Values = append(responseValue.Values, val)
-			}
-
-		} else if responseValue.Type == 0x40 {
-			for i := 0; i < 5; i++ {
-				if buffer.Len() < 4 {
-					break
-				}
-
-				val := int32(binary.LittleEndian.Uint32(buffer.Next(4)))
-
-				if val == -0x80000000 {
-					break
-				}
-
-				responseValue.Values = append(responseValue.Values, val)
-			}
-		}
-		p.ResponseValues = append(p.ResponseValues, responseValue)
 	}
 
 	return &p, nil
 }
+
+// parseValue from response
+func parseValue(buffer *bytes.Buffer, object uint16) *ResponseValue {
+	responseValue := ResponseValue{
+		Class:     uint8(buffer.Next(1)[0]),
+		Code:      binary.LittleEndian.Uint16(buffer.Next(2)),
+		Type:      uint8(buffer.Next(1)[0]),
+		Timestamp: binary.LittleEndian.Uint32(buffer.Next(4)),
+	}
+
+	if responseValue.Type == 0x10 {
+		responseValue.Values = append(responseValue.Values,
+			string(buffer.Next(32)))
+
+	} else if responseValue.Type == 0x08 {
+		for i := 0; i < 8; i++ {
+			if buffer.Len() < 4 {
+				break
+			}
+
+			val := binary.LittleEndian.Uint32(buffer.Next(4))
+
+			if val == 0xfffffe {
+				break
+			}
+			if val>>24 == 1 {
+				responseValue.Values = append(responseValue.Values, val&0xffffff)
+			}
+		}
+
+	} else if object == 0x5400 {
+		if buffer.Len() < 8 {
+			return nil
+		}
+		responseValue.Values = append(responseValue.Values,
+			binary.LittleEndian.Uint64(buffer.Next(8)))
+
+	} else if responseValue.Type == 0x00 {
+		for i := 0; i < 5; i++ {
+			if buffer.Len() < 4 {
+				break
+			}
+
+			val := binary.LittleEndian.Uint32(buffer.Next(4))
+
+			if val == 0xffffffff {
+				break
+			}
+
+			responseValue.Values = append(responseValue.Values, val)
+		}
+
+	} else if responseValue.Type == 0x40 {
+		for i := 0; i < 5; i++ {
+			if buffer.Len() < 4 {
+				break
+			}
+
+			val := int32(binary.LittleEndian.Uint32(buffer.Next(4)))
+
+			if val == -0x80000000 {
+				break
+			}
+
+			responseValue.Values = append(responseValue.Values, val)
+		}
+	}
+	return &responseValue
+}
+
+// AddParameter to sub packet
 func (d *DeviceData) AddParameter(param uint32) {
 	d.Parameters = append(d.Parameters, param)
 }

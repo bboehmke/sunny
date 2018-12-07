@@ -2,6 +2,7 @@ package sunny
 
 import "gitlab.com/bboehmke/sunny/proto"
 
+// valDef defines a value of an inverter device
 type valDef struct {
 	Object uint16
 	Start  uint32
@@ -51,9 +52,11 @@ var valuesDef = []valDef{
 	{0x5800, 0x00821E00, 0x008220FF, 0x00, 0x8220, "device_type"},
 }
 
+// cache for responses and requests
 var _responseValues map[uint32]string
 var _allRequests []valDef
 
+// defInit initialize cache
 func defInit() {
 	if _responseValues != nil {
 		return
@@ -67,6 +70,7 @@ func defInit() {
 	_allRequests = getRequests(valuesDef)
 }
 
+// _checkValue checks if response is a known value (without cache initialization)
 func _checkValue(value proto.ResponseValue) string {
 	if def, ok := _responseValues[uint32(value.Code)<<16+uint32(value.Class)]; ok {
 		return def
@@ -77,12 +81,14 @@ func _checkValue(value proto.ResponseValue) string {
 	return ""
 }
 
+// getAllRequests to receive all values
 func getAllRequests() []valDef {
 	defInit()
 
 	return _allRequests
 }
 
+// getRequest for given key
 func getRequest(key string) valDef {
 	for _, def := range valuesDef {
 		if def.Key == key {
@@ -92,6 +98,7 @@ func getRequest(key string) valDef {
 	return valDef{}
 }
 
+// getRequests to receive all of the given values (reduce request amount)
 func getRequests(values []valDef) []valDef {
 	defs := make([]valDef, 0, len(values))
 
@@ -115,6 +122,7 @@ func getRequests(values []valDef) []valDef {
 	return defs
 }
 
+// parseValues from response
 func parseValues(values []proto.ResponseValue) map[string]interface{} {
 	defInit()
 

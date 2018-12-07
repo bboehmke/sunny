@@ -15,8 +15,9 @@ const listenAddress = "239.12.255.254:9522"
 
 var conn *connection
 
+// DiscoverDevices in network
 func DiscoverDevices(password string) ([]*Device, error) {
-	c, err := getConnection(nil)
+	c, err := getConnection()
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,8 @@ func DiscoverDevices(password string) ([]*Device, error) {
 	return devices, nil
 }
 
-func getConnection(address *net.UDPAddr) (*connection, error) {
+// getConnection instance and initialize it if first access
+func getConnection() (*connection, error) {
 	if conn == nil {
 		c, err := newConnection()
 		if err != nil {
@@ -45,36 +47,38 @@ func getConnection(address *net.UDPAddr) (*connection, error) {
 		}
 		conn = c
 	}
-	if address != nil {
-		srcIP := address.IP.String()
-		if _, ok := conn.receivedBuffer[srcIP]; !ok {
-			conn.Lock()
-			conn.receivedBuffer[srcIP] = make(chan *proto.Packet, 5)
-			conn.Unlock()
-		}
-	}
 	return conn, nil
 }
 
+// Connection for communication with devices
 type connection struct {
 	sync.RWMutex
+
+	// multicast address
+	address *net.UDPAddr
+	// multicast socket
 	socket *net.UDPConn
 
-	receivedBuffer    map[string]chan *proto.Packet
+	// buffer for received packet
+	receivedBuffer map[string]chan *proto.Packet
+	// list of discovered devices
 	discoveredDevices map[string]*proto.Packet
 }
 
+// newConnection creates a new connection object and starts listening
 func newConnection() (*connection, error) {
-	udpAddr, err := net.ResolveUDPAddr("udp", listenAddress)
-	if err != nil {
-		return nil, err
-	}
-
 	conn := connection{
 		receivedBuffer:    make(map[string]chan *proto.Packet),
 		discoveredDevices: make(map[string]*proto.Packet),
 	}
-	conn.socket, err = net.ListenMulticastUDP("udp", nil, udpAddr)
+
+	var err error
+	conn.address, err = net.ResolveUDPAddr("udp", listenAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.socket, err = net.ListenMulticastUDP("udp", nil, conn.address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection: %v", err)
 	}
@@ -89,6 +93,7 @@ func newConnection() (*connection, error) {
 	return &conn, nil
 }
 
+// listenLoop for received packets
 func (c *connection) listenLoop() {
 	b := make([]byte, 2048)
 
@@ -106,34 +111,34 @@ func (c *connection) listenLoop() {
 			continue
 		}
 
-		srcIP := src.IP.String()
-		if _, ok := c.receivedBuffer[srcIP]; !ok {
-			c.Lock()
-			c.receivedBuffer[srcIP] = make(chan *proto.Packet, 5)
-			c.Unlock()
-		}
-
 		// store discovery responses
 		if pack.GetEntry(proto.DiscoveryRequestPacketEntryTag) != nil {
 			c.Lock()
-			c.discoveredDevices[srcIP] = &pack
+			c.discoveredDevices[src.IP.String()] = &pack
 			c.Unlock()
 		}
 
 		select {
-		case c.receivedBuffer[srcIP] <- &pack:
+		case c.getRecvChannel(src) <- &pack:
 		case <-time.After(time.Millisecond):
-			logrus.Debug("Drop package:", pack.String())
+			logrus.Debugf("Drop package %s from %v:", pack.String(), src)
 		}
 	}
 }
 
+// getRecvChannel returns the receive channel of this address
 func (c *connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
-	c.RLock()
-	defer c.RUnlock()
+	c.Lock()
+	defer c.Unlock()
+
+	if _, ok := c.receivedBuffer[address.IP.String()]; !ok {
+		c.receivedBuffer[address.IP.String()] = make(chan *proto.Packet, 5)
+	}
+
 	return c.receivedBuffer[address.IP.String()]
 }
 
+// clearReceived packages of the given address
 func (c *connection) clearReceived(address *net.UDPAddr) {
 	ch := c.getRecvChannel(address)
 	for {
@@ -145,6 +150,7 @@ func (c *connection) clearReceived(address *net.UDPAddr) {
 	}
 }
 
+// sendPacket to the given address
 func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
 	_, err := c.socket.WriteToUDP(packet.Bytes(), address)
 	if err != nil {
@@ -153,6 +159,7 @@ func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) erro
 	return nil
 }
 
+// readPacket from received channel
 func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *proto.Packet {
 	ch := c.getRecvChannel(address)
 
@@ -164,18 +171,16 @@ func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *pr
 	}
 }
 
+// discover reachable devices
 func (c *connection) discover() ([]string, error) {
-	address, err := net.ResolveUDPAddr("udp", "239.12.255.254:9522")
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve udp address: %v", err)
-	}
-
-	_, err = c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), address)
+	// send discover packet
+	_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send packet: %v", err)
 	}
 
-	time.Sleep(time.Second)
+	// wait some time for responses
+	time.Sleep(time.Second) // to much?
 
 	deviceAddresses := make([]string, 0, len(c.discoveredDevices))
 	for ip := range c.discoveredDevices {

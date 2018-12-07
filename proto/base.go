@@ -8,28 +8,32 @@ import (
 	"strings"
 )
 
-var packets = []ReadPacketEntry{
+// List of known packets
+var packets = []PacketEntry{
 	&GroupPacketEntry{},
 
 	&SmaNet2PacketEntry{},
 
 	&DiscoveryRequestPacketEntry{},
-	&DiscoveryIpPacketEntry{},
+	&DiscoveryIPPacketEntry{},
 }
 
+// PacketEntry inside a packet
 type PacketEntry interface {
+	// Tag returns entry identifier
 	Tag() uint16
+	// Bytes returns binary data
 	Bytes() []byte
-}
-type ReadPacketEntry interface {
-	PacketEntry
+	// Read packet from the given binary data
 	Read(data []byte) (PacketEntry, error)
 }
 
+// Packet with multiple packet entries
 type Packet struct {
 	entries []PacketEntry
 }
 
+// String representation of this packet
 func (p *Packet) String() string {
 	names := make([]string, 0, len(p.entries))
 	for _, e := range p.entries {
@@ -38,6 +42,7 @@ func (p *Packet) String() string {
 	return strings.Join(names, ", ")
 }
 
+// GetEntry from packet by tag id
 func (p *Packet) GetEntry(tag uint16) PacketEntry {
 	for _, e := range p.entries {
 		if e.Tag() == tag {
@@ -47,6 +52,7 @@ func (p *Packet) GetEntry(tag uint16) PacketEntry {
 	return nil
 }
 
+// AddEntry to this packet
 func (p *Packet) AddEntry(entry PacketEntry) {
 	if p.entries == nil {
 		p.entries = make([]PacketEntry, 0)
@@ -54,6 +60,7 @@ func (p *Packet) AddEntry(entry PacketEntry) {
 	p.entries = append(p.entries, entry)
 }
 
+// Bytes returns binary data
 func (p *Packet) Bytes() []byte {
 	var buffer bytes.Buffer
 	// packet header
@@ -76,6 +83,8 @@ func (p *Packet) Bytes() []byte {
 
 	return buffer.Bytes()
 }
+
+// Read packet from binary data
 func (p *Packet) Read(data []byte) error {
 	buffer := bytes.NewBuffer(data)
 
@@ -94,7 +103,7 @@ func (p *Packet) Read(data []byte) error {
 		tag := binary.BigEndian.Uint16(buffer.Next(2)) // including version
 
 		if length == 0 {
-			// last package
+			// last packet
 			break
 		}
 
@@ -121,6 +130,7 @@ func (p *Packet) Read(data []byte) error {
 	return nil
 }
 
+// checkLen returns error if data is to small
 func checkLen(data []byte, length int) error {
 	if len(data) >= length {
 		return nil
@@ -128,15 +138,20 @@ func checkLen(data []byte, length int) error {
 	return fmt.Errorf("invalid length %d - required %d", len(data), length)
 }
 
+// GroupPacketEntryTag identifier for group entries
 const GroupPacketEntryTag = 0x02A0
 
+// GroupPacketEntry entry with group information
 type GroupPacketEntry struct {
 	Group uint32
 }
 
+// Tag returns entry identifier
 func (e *GroupPacketEntry) Tag() uint16 {
 	return GroupPacketEntryTag
 }
+
+// Bytes returns binary data
 func (e *GroupPacketEntry) Bytes() []byte {
 	return []byte{
 		byte(e.Group >> 24),
@@ -145,6 +160,8 @@ func (e *GroupPacketEntry) Bytes() []byte {
 		byte(e.Group),
 	}
 }
+
+// Read packet from the given binary data
 func (e *GroupPacketEntry) Read(data []byte) (PacketEntry, error) {
 	err := checkLen(data, 4)
 	if err != nil {
@@ -156,14 +173,23 @@ func (e *GroupPacketEntry) Read(data []byte) (PacketEntry, error) {
 	}, nil
 }
 
+// UnknownPacketEntry entry with group information
 type UnknownPacketEntry struct {
 	Data []byte
 	T    uint16
 }
 
+// Tag returns entry identifier
 func (e *UnknownPacketEntry) Tag() uint16 {
 	return 0
 }
+
+// Bytes returns binary data
 func (e *UnknownPacketEntry) Bytes() []byte {
 	return e.Data
+}
+
+// Read packet from the given binary data
+func (e *UnknownPacketEntry) Read(data []byte) (PacketEntry, error) {
+	return nil, nil // will never be used
 }
