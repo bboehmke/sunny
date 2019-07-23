@@ -19,6 +19,7 @@ import (
 	"fmt"
 )
 
+// EnergyMeterPacketProtocolID protocol ID used for EnergyMeter sub packets
 const EnergyMeterPacketProtocolID uint16 = 0x6069
 
 // OBISIdentifier for values

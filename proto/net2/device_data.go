@@ -20,6 +20,7 @@ import (
 	"strings"
 )
 
+// DeviceDataProtocolID protocol ID used for DeviceData sub packets
 const DeviceDataProtocolID uint16 = 0x6065
 
 // ResponseValue of device data packet response
