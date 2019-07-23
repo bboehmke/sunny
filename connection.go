@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"gitlab.com/bboehmke/sunny/proto"
 )
 
@@ -114,14 +112,14 @@ func (c *connection) listenLoop() {
 	for c.socket != nil {
 		n, src, err := c.socket.ReadFromUDP(b)
 		if err != nil {
-			logrus.Debug("ReadFromUDP failed:", err)
+			// failed to read from udp -> retry
 			continue
 		}
 
 		var pack proto.Packet
 		err = pack.Read(b[:n])
 		if err != nil {
-			logrus.Debug("invalid package:", err)
+			// invalid packet received -> retry
 			continue
 		}
 
@@ -135,7 +133,7 @@ func (c *connection) listenLoop() {
 		select {
 		case c.getRecvChannel(src) <- &pack:
 		case <-time.After(time.Millisecond):
-			logrus.Debugf("Drop package %s from %v:", pack.String(), src)
+			// channel for received packets busy -> drop packet
 		}
 	}
 }
