@@ -27,7 +27,7 @@ import (
 func main() {
 	err := vfsgen.Generate(assets.Assets, vfsgen.Options{
 		PackageName:  "assets",
-		BuildTags:    "!dev",
+		BuildTags:    "prod",
 		VariableName: "Assets",
 		Filename:     "./assets/assets_vfsdata.go",
 	})
