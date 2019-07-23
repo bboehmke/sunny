@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gitlab.com/bboehmke/sunny/proto"
+	"gitlab.com/bboehmke/sunny/proto/net2"
 )
 
 // Device instance for communication with inverter and energy meter
@@ -19,9 +20,8 @@ type Device struct {
 	conn *connection
 
 	// device information
-	energyMeter  bool
-	susyID       uint16
-	serialNumber uint32
+	energyMeter bool
+	id          net2.DeviceId
 }
 
 // NewDevice creates a new device instance
@@ -46,7 +46,7 @@ func NewDevice(address, password string) (*Device, error) {
 	conn.clearReceived(device.address)
 
 	// send ping
-	pingData := proto.NewDeviceData(0xa0)
+	pingData := net2.NewDeviceData(0xa0)
 	pingData.AddParameter(0)
 	pingData.AddParameter(0)
 	err = device.sendDeviceData(pingData)
@@ -61,14 +61,12 @@ func NewDevice(address, password string) (*Device, error) {
 	}
 
 	switch c := net2Entry.Content.(type) {
-	case *proto.EnergyMeterPacket:
+	case *net2.EnergyMeterPacket:
 		device.energyMeter = true
-		device.susyID = c.SusyID
-		device.serialNumber = c.SerNo
+		device.id = c.Id
 
-	case *proto.DeviceData:
-		device.susyID = c.SrcSusyID
-		device.serialNumber = c.SrcSerialNumber
+	case *net2.DeviceData:
+		device.id = c.Source
 
 	default:
 		return nil, fmt.Errorf("received unknown net2 packet from %s", address)
@@ -114,7 +112,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 			return nil, err
 		}
 
-		packet, ok := net2Entry.Content.(*proto.EnergyMeterPacket)
+		packet, ok := net2Entry.Content.(*net2.EnergyMeterPacket)
 		if !ok {
 			// TODO retry !!!
 			return nil, fmt.Errorf("invalid packet received")
@@ -152,7 +150,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 
 // login to device
 func (d *Device) login() error {
-	loginData := proto.NewDeviceData(0xa0)
+	loginData := net2.NewDeviceData(0xa0)
 	loginData.Command = 0x0c
 	loginData.Object = 0xfffd
 	loginData.JobNumber = 0x01
@@ -189,7 +187,7 @@ func (d *Device) login() error {
 
 // logout to device
 func (d *Device) logout() {
-	request := proto.NewDeviceData(0xa0)
+	request := net2.NewDeviceData(0xa0)
 	request.Command = 0x0e
 	request.Object = 0xfffd
 	request.JobNumber = 0x03
@@ -201,12 +199,12 @@ func (d *Device) logout() {
 
 // requestValues from given definition
 func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
-	request := proto.NewDeviceData(0xa0)
+	request := net2.NewDeviceData(0xa0)
 	request.Object = def.Object
 	request.AddParameter(def.Start)
 	request.AddParameter(def.End)
 
-	response, err := d.sendDeviceDataResponse(request, time.Second)
+	response, err := d.sendDeviceDataResponse(request, time.Second*10)
 	if err != nil {
 		return nil, err
 	}
@@ -222,8 +220,8 @@ func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
 }
 
 // sendDeviceDataResponse sends the package and wait for response
-func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
-	timeout time.Duration) (*proto.DeviceData, error) {
+func (d *Device) sendDeviceDataResponse(data *net2.DeviceData,
+	timeout time.Duration) (*net2.DeviceData, error) {
 
 	err := d.sendDeviceData(data)
 	if err != nil {
@@ -237,7 +235,7 @@ func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
 			continue // no valid packet
 		}
 
-		responseData, ok := entry.Content.(*proto.DeviceData)
+		responseData, ok := entry.Content.(*net2.DeviceData)
 		if !ok {
 			continue // no device data packet
 		}
@@ -253,13 +251,12 @@ func (d *Device) sendDeviceDataResponse(data *proto.DeviceData,
 }
 
 // sendDeviceData sends the package
-func (d *Device) sendDeviceData(data *proto.DeviceData) error {
-	if d.susyID == 0 && d.serialNumber == 0 {
-		data.DstSusyID = 0xFFFF
-		data.DstSerialNumber = 0xFFFFFFFF
+func (d *Device) sendDeviceData(data *net2.DeviceData) error {
+	if d.id.SusyID == 0 && d.id.SerialNumber == 0 {
+		data.Destination.SusyID = 0xFFFF
+		data.Destination.SerialNumber = 0xFFFFFFFF
 	} else {
-		data.DstSusyID = d.susyID
-		data.DstSerialNumber = d.serialNumber
+		data.Destination = d.id
 	}
 
 	var pack proto.Packet

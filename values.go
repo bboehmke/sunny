@@ -1,6 +1,8 @@
 package sunny
 
-import "gitlab.com/bboehmke/sunny/proto"
+import (
+	"gitlab.com/bboehmke/sunny/proto/net2"
+)
 
 // valDef defines a value of an inverter device
 type valDef struct {
@@ -71,7 +73,7 @@ func defInit() {
 }
 
 // _checkValue checks if response is a known value (without cache initialization)
-func _checkValue(value proto.ResponseValue) string {
+func _checkValue(value *net2.ResponseValue) string {
 	if def, ok := _responseValues[uint32(value.Code)<<16+uint32(value.Class)]; ok {
 		return def
 	}
@@ -123,7 +125,7 @@ func getRequests(values []valDef) []valDef {
 }
 
 // parseValues from response
-func parseValues(values []proto.ResponseValue) map[string]interface{} {
+func parseValues(values []*net2.ResponseValue) map[string]interface{} {
 	defInit()
 
 	data := make(map[string]interface{}, len(values))

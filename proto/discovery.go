@@ -15,7 +15,7 @@ func NewDiscoveryRequest() *Packet {
 }
 
 // DiscoveryRequestPacketEntryTag identifier for discovery request entries
-const DiscoveryRequestPacketEntryTag = 0x0020
+const DiscoveryRequestPacketEntryTag uint16 = 0x0020
 
 // DiscoveryRequestPacketEntry empty packet
 type DiscoveryRequestPacketEntry struct {
@@ -37,7 +37,7 @@ func (e *DiscoveryRequestPacketEntry) Read(data []byte) (PacketEntry, error) {
 }
 
 // DiscoveryIPPacketEntryTag identifier for discovery IP entries
-const DiscoveryIPPacketEntryTag = 0x0030
+const DiscoveryIPPacketEntryTag uint16 = 0x0030
 
 // DiscoveryIPPacketEntry with IP address of device
 type DiscoveryIPPacketEntry struct {

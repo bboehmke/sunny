@@ -130,16 +130,8 @@ func (p *Packet) Read(data []byte) error {
 	return nil
 }
 
-// checkLen returns error if data is to small
-func checkLen(data []byte, length int) error {
-	if len(data) >= length {
-		return nil
-	}
-	return fmt.Errorf("invalid length %d - required %d", len(data), length)
-}
-
 // GroupPacketEntryTag identifier for group entries
-const GroupPacketEntryTag = 0x02A0
+const GroupPacketEntryTag uint16 = 0x02A0
 
 // GroupPacketEntry entry with group information
 type GroupPacketEntry struct {
@@ -163,9 +155,8 @@ func (e *GroupPacketEntry) Bytes() []byte {
 
 // Read packet from the given binary data
 func (e *GroupPacketEntry) Read(data []byte) (PacketEntry, error) {
-	err := checkLen(data, 4)
-	if err != nil {
-		return nil, err
+	if len(data) < 4 {
+		return nil, fmt.Errorf("invalid GroupPacketEntry - length %d", len(data))
 	}
 
 	return &GroupPacketEntry{
@@ -181,7 +172,7 @@ type UnknownPacketEntry struct {
 
 // Tag returns entry identifier
 func (e *UnknownPacketEntry) Tag() uint16 {
-	return 0
+	return e.T
 }
 
 // Bytes returns binary data

@@ -12,6 +12,7 @@ require (
 	github.com/shurcooL/httpfs v0.0.0-20171119174359-809beceb2371 // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20181020040650-a97a25d856ca // indirect
 	github.com/sirupsen/logrus v1.2.0
+	github.com/stretchr/testify v1.2.2
 	github.com/ugorji/go/codec v0.0.0-20181127175209-856da096dbdf // indirect
 	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect

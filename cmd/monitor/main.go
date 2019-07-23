@@ -3,8 +3,6 @@ package main
 //go:generate go run -tags=dev ./asset_generator.go
 
 import (
-	"gitlab.com/bboehmke/sunny"
-	"gitlab.com/bboehmke/sunny/cmd/monitor/assets"
 	"net/http"
 	"os"
 	"strings"
@@ -14,6 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
+
+	"gitlab.com/bboehmke/sunny"
+	"gitlab.com/bboehmke/sunny/cmd/monitor/assets"
 )
 
 var websocketUpgrader = websocket.Upgrader{}
@@ -102,7 +103,7 @@ func (s *MonitorService) update() {
 
 	state := SolarState{
 		SolarPower:    pvPower.(int32),
-		SupplierPower: int32(supplierPlus.(uint64)-supplierMinus.(uint64)) / 10,
+		SupplierPower: int32(supplierPlus.(uint32)-supplierMinus.(uint32)) / 10,
 		BatteryPower:  batteryPower.(int32),
 		BatteryCharge: batteryCharge.(uint32),
 	}
