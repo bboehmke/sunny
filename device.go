@@ -130,6 +130,32 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	return 0, fmt.Errorf("no device class")
 }
 
+// GetDeviceName returns the name of the device
+func (d *Device) GetDeviceName() (string, error) {
+	if d.energyMeter {
+		return "Energy Meter", nil
+	}
+
+	err := d.login()
+	if err != nil {
+		return "", err
+	}
+
+	values, err := d.requestValues(getRequest("device_name"))
+	if err != nil {
+		return "", err
+	}
+
+	// clear queue -> get fresh data
+	d.conn.clearReceived(d.address)
+
+	d.logout()
+	if val, ok := values["device_name"]; ok {
+		return val.(string), nil
+	}
+	return "", fmt.Errorf("no device name")
+}
+
 // GetValues from device
 func (d *Device) GetValues() (map[string]interface{}, error) {
 	// clear queue -> get fresh data
