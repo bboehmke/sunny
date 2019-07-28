@@ -94,6 +94,16 @@ func (d *Device) SerialNumber() uint32 {
 	return d.id.SerialNumber
 }
 
+// Address returns the address of the device
+func (d *Device) Address() *net.UDPAddr {
+	return d.address
+}
+
+// IsEnergyMeter returns true if devices is an energy meter
+func (d *Device) IsEnergyMeter() bool {
+	return d.energyMeter
+}
+
 // GetDeviceClass returns the class identifier of the device (1 = energy meter)
 func (d *Device) GetDeviceClass() (uint32, error) {
 	if d.energyMeter {
