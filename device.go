@@ -162,18 +162,23 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 	d.conn.clearReceived(d.address)
 
 	if d.energyMeter {
-		net2Entry, err := d.readNet2(time.Second * 2)
-		if err != nil {
-			return nil, err
-		}
+		start := time.Now()
+		var err error
+		var net2Entry *proto.SmaNet2PacketEntry
+		for time.Now().Sub(start) < time.Second*2 {
+			net2Entry, err = d.readNet2(time.Second * 2)
+			if err != nil {
+				continue
+			}
 
-		packet, ok := net2Entry.Content.(*net2.EnergyMeterPacket)
-		if !ok {
-			// TODO retry !!!
-			return nil, fmt.Errorf("invalid packet received")
+			packet, ok := net2Entry.Content.(*net2.EnergyMeterPacket)
+			if !ok {
+				err = fmt.Errorf("invalid packet received")
+				continue
+			}
+			return packet.GetValues(), nil
 		}
-
-		return packet.GetValues(), nil
+		return nil, err
 	}
 
 	// login to device
