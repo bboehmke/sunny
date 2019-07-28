@@ -89,6 +89,11 @@ func NewDevice(address, password string) (*Device, error) {
 	return &device, nil
 }
 
+// SerialNumber returns the serial number of the device
+func (d *Device) SerialNumber() uint32 {
+	return d.id.SerialNumber
+}
+
 // GetDeviceClass returns the class identifier of the device (1 = energy meter)
 func (d *Device) GetDeviceClass() (uint32, error) {
 	if d.energyMeter {
