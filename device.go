@@ -127,7 +127,7 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	if val, ok := values["device_class"]; ok {
 		return val.(uint32), nil
 	}
-	return 0, fmt.Errorf("")
+	return 0, fmt.Errorf("no device class")
 }
 
 // GetValues from device
