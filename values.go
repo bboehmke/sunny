@@ -54,8 +54,8 @@ var valuesDef = []valDef{
 	{0x5380, 0x00251E00, 0x00251EFF, 0x01, 0x251E, "power_dc1"},
 	{0x5380, 0x00251E00, 0x00251EFF, 0x02, 0x251E, "power_dc2"},
 	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x451F, "voltage_dc1"},
-	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x4521, "current_dc1"},
 	{0x5380, 0x00451F00, 0x004521FF, 0x02, 0x451F, "voltage_dc2"},
+	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x4521, "current_dc1"},
 	{0x5380, 0x00451F00, 0x004521FF, 0x02, 0x4521, "current_dc2"},
 
 	{0x5400, 0x00260100, 0x002622FF, 0x00, 0x2601, "energy_total"},
@@ -69,29 +69,35 @@ var valuesDef = []valDef{
 }
 
 // cache for responses and requests
-var _responseValues map[uint32]string
-var _allRequests []valDef
+var responseValues map[uint32]string
+var allRequests []valDef
+var requestMap map[string]valDef
 
-// defInit initialize cache
-func defInit() {
-	if _responseValues != nil {
+// init cache
+func init() {
+	if responseValues != nil {
 		return
 	}
 
-	_responseValues = make(map[uint32]string, len(valuesDef))
+	responseValues = make(map[uint32]string, len(valuesDef))
 	for _, def := range valuesDef {
-		_responseValues[uint32(def.Code)<<16+uint32(def.Class)] = def.Key
+		responseValues[uint32(def.Code)<<16+uint32(def.Class)] = def.Key
 	}
 
-	_allRequests = getRequests(valuesDef)
+	allRequests = getRequests(valuesDef)
+
+	requestMap = make(map[string]valDef)
+	for _, def := range valuesDef {
+		requestMap[def.Key] = def
+	}
 }
 
-// _checkValue checks if response is a known value (without cache initialization)
-func _checkValue(value *net2.ResponseValue) string {
-	if def, ok := _responseValues[uint32(value.Code)<<16+uint32(value.Class)]; ok {
+// checkValue checks if response is a known value
+func checkValue(value *net2.ResponseValue) string {
+	if def, ok := responseValues[uint32(value.Code)<<16+uint32(value.Class)]; ok {
 		return def
 	}
-	if def, ok := _responseValues[uint32(value.Code)<<16]; ok {
+	if def, ok := responseValues[uint32(value.Code)<<16]; ok {
 		return def
 	}
 	return ""
@@ -99,19 +105,12 @@ func _checkValue(value *net2.ResponseValue) string {
 
 // getAllRequests to receive all values
 func getAllRequests() []valDef {
-	defInit()
-
-	return _allRequests
+	return allRequests
 }
 
 // getRequest for given key
 func getRequest(key string) valDef {
-	for _, def := range valuesDef {
-		if def.Key == key {
-			return def
-		}
-	}
-	return valDef{}
+	return requestMap[key]
 }
 
 // getRequests to receive all of the given values (reduce request amount)
@@ -134,14 +133,11 @@ func getRequests(values []valDef) []valDef {
 			defs = append(defs, value)
 		}
 	}
-
 	return defs
 }
 
 // parseValues from response
 func parseValues(values []*net2.ResponseValue) map[string]interface{} {
-	defInit()
-
 	data := make(map[string]interface{}, len(values))
 
 	for _, val := range values {
@@ -149,10 +145,9 @@ func parseValues(values []*net2.ResponseValue) map[string]interface{} {
 			continue
 		}
 
-		if key := _checkValue(val); key != "" {
+		if key := checkValue(val); key != "" {
 			data[key] = val.Values[0]
 		}
 	}
-
 	return data
 }
