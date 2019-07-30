@@ -78,16 +78,16 @@ type emValDef struct {
 }
 
 var emValuesDef = []emValDef{
-	{"0:1.4.0 ", "active_power_plus", "Active Power + (W)"},
-	{"0:1.8.0 ", "active_energy_plus", "Active Energy + (Wh)"},
-	{"0:2.4.0 ", "active_power_minus", "Active Power - (W)"},
-	{"0:2.8.0 ", "active_energy_minus", "Active Energy - (Wh)"},
-	{"0:3.4.0 ", "reactive_power_plus", "Reactive Power + (var)"},
-	{"0:3.8.0 ", "reactive_energy_plus", "Reactive Energy + (varh)"},
-	{"0:4.4.0 ", "reactive_power_minus", "Reactive Power - (var)"},
-	{"0:4.8.0 ", "reactive_energy_minus", "Reactive Energy - (varh)"},
-	{"0:9.4.0 ", "apparent_power_plus", "Apparent Power + (VA)"},
-	{"0:9.8.0 ", "apparent_energy_plus", "Apparent Energy + (VAh)"},
+	{"0:1.4.0", "active_power_plus", "Active Power + (W)"},
+	{"0:1.8.0", "active_energy_plus", "Active Energy + (Wh)"},
+	{"0:2.4.0", "active_power_minus", "Active Power - (W)"},
+	{"0:2.8.0", "active_energy_minus", "Active Energy - (Wh)"},
+	{"0:3.4.0", "reactive_power_plus", "Reactive Power + (var)"},
+	{"0:3.8.0", "reactive_energy_plus", "Reactive Energy + (varh)"},
+	{"0:4.4.0", "reactive_power_minus", "Reactive Power - (var)"},
+	{"0:4.8.0", "reactive_energy_minus", "Reactive Energy - (varh)"},
+	{"0:9.4.0", "apparent_power_plus", "Apparent Power + (VA)"},
+	{"0:9.8.0", "apparent_energy_plus", "Apparent Energy + (VAh)"},
 	{"0:10.4.0", "apparent_power_minus", "Apparent Power - (VA)"},
 	{"0:10.8.0", "apparent_energy_minus", "Apparent Energy - (VAh)"},
 	{"0:13.4.0", "power_factor", "Power Factor (1/1000)"},
@@ -244,8 +244,7 @@ func parseValues(values []*net2.ResponseValue) map[string]interface{} {
 func emKeyValues(values map[string]interface{}) map[string]interface{} {
 	data := make(map[string]interface{}, len(values))
 	for obis, value := range values {
-		def, ok := emObisMap[obis]
-		if ok {
+		if def, ok := emObisMap[obis]; ok {
 			data[def.Key] = value
 		} else {
 			data[obis] = value
