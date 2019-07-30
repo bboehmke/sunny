@@ -90,11 +90,11 @@ func (s *MonitorService) update() {
 	}
 
 	// get energy meter values
-	supplierPlus, ok := energyMeterValues["0:1.4.0"]
+	supplierPlus, ok := energyMeterValues["active_power_plus"]
 	if !ok || supplierPlus == nil {
 		supplierPlus = uint64(0)
 	}
-	supplierMinus, ok := energyMeterValues["0:2.4.0"]
+	supplierMinus, ok := energyMeterValues["active_power_minus"]
 	if !ok || supplierMinus == nil {
 		supplierMinus = uint64(0)
 	}
