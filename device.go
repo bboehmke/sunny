@@ -176,7 +176,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 				err = fmt.Errorf("invalid packet received")
 				continue
 			}
-			return packet.GetValues(), nil
+			return emKeyValues(packet.GetValues()), nil
 		}
 		return nil, err
 	}
@@ -206,6 +206,14 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 	d.logout()
 
 	return valuesMap, nil
+}
+
+// GetValueDescription for value
+func (d *Device) GetValueDescription(key string) string {
+	if d.energyMeter {
+		return emKeyMap[key].Description
+	}
+	return valueMap[key].Description
 }
 
 // login to device
