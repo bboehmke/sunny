@@ -117,7 +117,7 @@ func (s *MonitorService) update() {
 
 	state := SolarState{
 		SolarPower:    pvPower.(int32),
-		SupplierPower: int32(supplierPlus.(uint32)-supplierMinus.(uint32)) / 10,
+		SupplierPower: int32(supplierPlus.(float64) - supplierMinus.(float64)),
 		BatteryPower:  batteryPower.(int32),
 		BatteryCharge: batteryCharge.(uint32),
 	}
