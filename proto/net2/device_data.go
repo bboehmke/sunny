@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 // DeviceDataProtocolID protocol ID used for DeviceData sub packets
@@ -217,14 +218,14 @@ func (v *ResponseValue) Read(data []byte, object uint16) (int, error) {
 }
 
 // counter for packet id - increased on every packet
-var packetIDCounter uint8
+var packetIDCounter uint32
 
 // more or less unique ID of the current system
 var systemID *DeviceId
 
 // NewDeviceData creates a device data request
 func NewDeviceData(control uint8) *DeviceData {
-	packetIDCounter++
+	pkgId := atomic.AddUint32(&packetIDCounter, 1)
 
 	// initialize system id on first call
 	if systemID == nil {
@@ -234,7 +235,7 @@ func NewDeviceData(control uint8) *DeviceData {
 	return &DeviceData{
 		Control:  control,
 		Source:   *systemID,
-		PacketID: uint16(packetIDCounter),
+		PacketID: uint16(pkgId),
 	}
 }
 

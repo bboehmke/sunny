@@ -64,7 +64,7 @@ func getConnection() (*connection, error) {
 
 // Connection for communication with devices
 type connection struct {
-	sync.RWMutex
+	mutex sync.RWMutex
 
 	// multicast address
 	address *net.UDPAddr
@@ -125,9 +125,9 @@ func (c *connection) listenLoop() {
 
 		// store discovery responses
 		if pack.GetEntry(proto.DiscoveryRequestPacketEntryTag) != nil {
-			c.Lock()
+			c.mutex.Lock()
 			c.discoveredDevices[src.IP.String()] = &pack
-			c.Unlock()
+			c.mutex.Unlock()
 		}
 
 		select {
@@ -140,8 +140,8 @@ func (c *connection) listenLoop() {
 
 // getRecvChannel returns the receive channel of this address
 func (c *connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
-	c.Lock()
-	defer c.Unlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	if _, ok := c.receivedBuffer[address.IP.String()]; !ok {
 		c.receivedBuffer[address.IP.String()] = make(chan *proto.Packet, 5)
@@ -194,6 +194,8 @@ func (c *connection) discover() ([]string, error) {
 	// wait some time for responses
 	time.Sleep(time.Second) // to much?
 
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 	deviceAddresses := make([]string, 0, len(c.discoveredDevices))
 	for ip := range c.discoveredDevices {
 		deviceAddresses = append(deviceAddresses, ip)
