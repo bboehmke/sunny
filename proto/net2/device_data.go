@@ -233,9 +233,10 @@ func NewDeviceData(control uint8) *DeviceData {
 	}
 
 	return &DeviceData{
-		Control:  control,
-		Source:   *systemID,
-		PacketID: uint16(pkgId),
+		Control: control,
+		Source:  *systemID,
+		// count up only last byte
+		PacketID: uint16(pkgId & 0xFF),
 	}
 }
 
