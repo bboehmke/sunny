@@ -168,6 +168,15 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// set interface if given
+	ifName := getEnv("INTERFACE", "")
+	if ifName != "" {
+		err := sunny.SetMulticastInterface(ifName)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+	}
+
 	password := getEnv("PASSWORD", "0000")
 
 	service := MonitorService{}

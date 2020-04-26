@@ -25,6 +25,18 @@ import (
 
 const listenAddress = "239.12.255.254:9522"
 
+var listenInterface *net.Interface
+var interfaceMutex sync.RWMutex
+
+// SetMulticastInterface for communication with devices
+func SetMulticastInterface(name string) (err error) {
+	interfaceMutex.Lock()
+	defer interfaceMutex.Unlock()
+
+	listenInterface, err = net.InterfaceByName(name)
+	return
+}
+
 var conn *connection
 
 // DiscoverDevices in network
@@ -90,7 +102,9 @@ func newConnection() (*connection, error) {
 		return nil, err
 	}
 
-	conn.socket, err = net.ListenMulticastUDP("udp", nil, conn.address)
+	interfaceMutex.RLock()
+	conn.socket, err = net.ListenMulticastUDP("udp", listenInterface, conn.address)
+	interfaceMutex.RUnlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection: %v", err)
 	}
