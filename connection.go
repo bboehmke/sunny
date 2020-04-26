@@ -33,7 +33,11 @@ func SetMulticastInterface(name string) (err error) {
 	interfaceMutex.Lock()
 	defer interfaceMutex.Unlock()
 
-	listenInterface, err = net.InterfaceByName(name)
+	if name == "" {
+		listenInterface = nil
+	} else {
+		listenInterface, err = net.InterfaceByName(name)
+	}
 	return
 }
 

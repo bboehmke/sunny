@@ -169,18 +169,14 @@ func main() {
 	}
 
 	// set interface if given
-	ifName := getEnv("INTERFACE", "")
-	if ifName != "" {
-		err := sunny.SetMulticastInterface(ifName)
-		if err != nil {
-			logrus.Fatal(err)
-		}
+	err := sunny.SetMulticastInterface(getEnv("INTERFACE", ""))
+	if err != nil {
+		logrus.Fatal(err)
 	}
 
 	password := getEnv("PASSWORD", "0000")
 
 	service := MonitorService{}
-	var err error
 
 	service.SolarInverter, err = getDeviceFromEnv("SOLAR_INVERTER", password)
 	if err != nil {
