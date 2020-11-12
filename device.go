@@ -211,9 +211,17 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 // GetValueDescription for value
 func (d *Device) GetValueDescription(key string) string {
 	if d.energyMeter {
-		return emKeyMap[key].Description
+		return emKeyMap[key].Info.Description
 	}
-	return valueMap[key].Description
+	return valueMap[key].Info.Description
+}
+
+// GetValueInfo for value
+func (d *Device) GetValueInfo(key string) ValueInfo {
+	if d.energyMeter {
+		return emKeyMap[key].Info
+	}
+	return valueMap[key].Info
 }
 
 // login to device
