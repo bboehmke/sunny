@@ -204,13 +204,15 @@ func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *pr
 // discover reachable devices
 func (c *connection) discover() ([]string, error) {
 	// send discover packet
-	_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send packet: %v", err)
-	}
+	for i := 0; i < 6; i++ {
+		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send packet: %v", err)
+		}
 
-	// wait some time for responses
-	time.Sleep(time.Second) // to much?
+		// wait some time for responses
+		time.Sleep(time.Millisecond * 500)
+	}
 
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
