@@ -69,7 +69,7 @@ func NewDevice(address, password string) (*Device, error) {
 	}
 
 	// wait for receive
-	net2Entry, err := device.readNet2(time.Second)
+	net2Entry, err := device.readNet2(time.Second * 3)
 	if err != nil {
 		return nil, err
 	}
