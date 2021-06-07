@@ -59,7 +59,7 @@ func DiscoverDevices(password string) ([]*Device, error) {
 	for _, ip := range addresses {
 		device, err := NewDevice(ip, password)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		devices = append(devices, device)
 	}
@@ -142,9 +142,14 @@ func (c *connection) listenLoop() {
 		}
 
 		// store discovery responses
+		srcIp := src.IP.String()
 		if pack.GetEntry(proto.DiscoveryRequestPacketEntryTag) != nil {
 			c.mutex.Lock()
-			c.discoveredDevices[src.IP.String()] = &pack
+			c.discoveredDevices[srcIp] = &pack
+			c.mutex.Unlock()
+		} else if _, ok := c.discoveredDevices[srcIp]; !ok {
+			c.mutex.Lock()
+			c.discoveredDevices[srcIp] = nil
 			c.mutex.Unlock()
 		}
 
