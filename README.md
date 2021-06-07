@@ -11,6 +11,8 @@ via Ethernet (Speedwire).
 > Note: SMA & Speedwire are registered trademarks by
 > [SMA Solar Technology AG](https://www.sma.de/en/company/about-sma.html)
 
+An example application can be found [here](https://gitlab.com/bboehmke/sunny-monitor).
+
 ## Usage
 
 > The password in the following function is the one of the user account which 
@@ -45,27 +47,6 @@ The values differs from device to device:
 
 > Note: The data from energy meters are broadcasted only once a second. 
 
-
-## Monitor Application
-
-There is also a simple monitor application provided as example how to use the 
-library. This application requires exactly one energy meter, one PV inverter 
-and one battery inverter.
-
-If the application ist started it will discover this devices and starts a 
-little web server that is reachable under http://127.0.0.1:8080 which
-displays the actual state of the devices.
-
-![monitor_app](monitor_app.png)
-
-The following configurations can be changed via environment variables:
-
-| Variable         | Description                                | 
-| ---------------- | ------------------------------------------ |
-| PASSWORD         | User password for inverter (Default: 0000) | 
-| SOLAR_INVERTER   | Address of PV inverter                     | 
-| BATTERY_INVERTER | Address of battery inverter                | 
-| ENERGY_METER     | Address of energy meter                    | 
 
 ## Speedwire Protocol
 
