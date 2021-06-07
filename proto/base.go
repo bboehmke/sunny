@@ -22,6 +22,9 @@ import (
 	"strings"
 )
 
+// identifier of speedwire packets
+var packetHeader = []byte{'S', 'M', 'A', 0}
+
 // List of known packets
 var packets = []PacketEntry{
 	&GroupPacketEntry{},
@@ -68,9 +71,6 @@ func (p *Packet) GetEntry(tag uint16) PacketEntry {
 
 // AddEntry to this packet
 func (p *Packet) AddEntry(entry PacketEntry) {
-	if p.entries == nil {
-		p.entries = make([]PacketEntry, 0)
-	}
 	p.entries = append(p.entries, entry)
 }
 
@@ -78,11 +78,10 @@ func (p *Packet) AddEntry(entry PacketEntry) {
 func (p *Packet) Bytes() []byte {
 	var buffer bytes.Buffer
 	// packet header
-	buffer.Write([]byte{'S', 'M', 'A', 0})
+	buffer.Write(packetHeader)
 
+	b := make([]byte, 2)
 	for _, e := range p.entries {
-		b := make([]byte, 2)
-
 		binary.BigEndian.PutUint16(b, uint16(len(e.Bytes())))
 		buffer.Write(b)
 
@@ -107,11 +106,10 @@ func (p *Packet) Read(data []byte) error {
 	}
 
 	head := buffer.Next(4)
-	if head[0] != 'S' || head[1] != 'M' || head[2] != 'A' || head[3] != 0 {
+	if !bytes.Equal(packetHeader, head[:4]) {
 		return fmt.Errorf("invalid packet - header: %s", string(head[:3]))
 	}
 
-	p.entries = make([]PacketEntry, 0)
 	for buffer.Len() >= 4 {
 		length := binary.BigEndian.Uint16(buffer.Next(2))
 		tag := binary.BigEndian.Uint16(buffer.Next(2)) // including version
