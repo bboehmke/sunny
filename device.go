@@ -47,7 +47,7 @@ func NewDevice(address, password string) (*Device, error) {
 	var err error
 	device.address, err = net.ResolveUDPAddr("udp", address+":9522")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve udp address: %v", err)
+		return nil, fmt.Errorf("failed to resolve udp address: %w", err)
 	}
 
 	// get connection instance
@@ -252,7 +252,7 @@ func (d *Device) login() error {
 
 	response, err := d.sendDeviceDataResponse(loginData, time.Second)
 	if err != nil {
-		return fmt.Errorf("login failed: %v", err)
+		return fmt.Errorf("login failed: %w", err)
 	}
 
 	if response.Status != 0 {

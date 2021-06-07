@@ -110,7 +110,7 @@ func newConnection() (*connection, error) {
 	conn.socket, err = net.ListenMulticastUDP("udp", listenInterface, conn.address)
 	interfaceMutex.RUnlock()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection: %v", err)
+		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 
 	err = conn.socket.SetReadBuffer(2048)
@@ -189,7 +189,7 @@ func (c *connection) clearReceived(address *net.UDPAddr) {
 func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
 	_, err := c.socket.WriteToUDP(packet.Bytes(), address)
 	if err != nil {
-		return fmt.Errorf("failed to send packet: %v", err)
+		return fmt.Errorf("failed to send packet: %w", err)
 	}
 	return nil
 }
@@ -212,7 +212,7 @@ func (c *connection) discover() ([]string, error) {
 	for i := 0; i < 6; i++ {
 		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
 		if err != nil {
-			return nil, fmt.Errorf("failed to send packet: %v", err)
+			return nil, fmt.Errorf("failed to send packet: %w", err)
 		}
 
 		// wait some time for responses
