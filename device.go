@@ -165,7 +165,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 		start := time.Now()
 		var err error
 		var net2Entry *proto.SmaNet2PacketEntry
-		for time.Now().Sub(start) < time.Second*2 {
+		for time.Since(start) < time.Second*2 {
 			net2Entry, err = d.readNet2(time.Second * 2)
 			if err != nil {
 				continue
