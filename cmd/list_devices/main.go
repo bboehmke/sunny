@@ -44,7 +44,7 @@ func main() {
 			fmt.Printf("ERROR: %v\n", err)
 		} else {
 			for key, value := range values {
-				fmt.Printf("%s: %v\n", key, value)
+				fmt.Printf("%s: %v %s\n", key, value, device.GetValueInfo(key).Unit)
 			}
 		}
 		fmt.Printf("==================================================\n")
