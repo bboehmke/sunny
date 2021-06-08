@@ -214,10 +214,10 @@ function parse_net2_emergy_meter(root, buffer)
         local val_length = 0
         if buffer:range(offset+2, 1):uint() == 8 then
             -- TODO find better solution for big integers
-            value_str = string.format("%d", buffer:range(offset+9, 4):uint())
+            value_str = string.format("%d", buffer:range(offset+8, 4):uint())
             val_length = 8
         else
-            value_str = string.format("%d", buffer:range(offset+5, 4):uint())
+            value_str = string.format("%d", buffer:range(offset+4, 4):uint())
             val_length = 4
         end
 
@@ -229,9 +229,9 @@ function parse_net2_emergy_meter(root, buffer)
         obis_tree:add(pf_net2_em_obis_tariff, buffer:range(offset+3, 1))
 
         if buffer:range(offset+2, 1):uint() == 8 then
-            value_tree:add(pf_net2_em_val_l, buffer:range(offset+5, 8))
+            value_tree:add(pf_net2_em_val_l, buffer:range(offset+4, 8))
         else
-            value_tree:add(pf_net2_em_val, buffer:range(offset+5, 4))
+            value_tree:add(pf_net2_em_val, buffer:range(offset+4, 4))
         end
         offset = offset + 4 + val_length
     end
