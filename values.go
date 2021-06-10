@@ -50,9 +50,9 @@ var valuesDef = []valDef{
 	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4648, "voltage_ac1", 0.01, ValueInfo{"Voltage on AC L1", "V", "voltage"}},
 	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4649, "voltage_ac2", 0.01, ValueInfo{"Voltage on AC L2", "V", "voltage"}},
 	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x464a, "voltage_ac3", 0.01, ValueInfo{"Voltage on AC L3", "V", "voltage"}},
-	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4653, "current_ac1", 0.001, ValueInfo{"Current on AC L1", "A", "current"}},
-	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4654, "current_ac2", 0.001, ValueInfo{"Current on AC L2", "A", "current"}},
-	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4655, "current_ac3", 0.001, ValueInfo{"Current on AC L3", "A", "current"}},
+	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4653, "current_ac1", 0.001, ValueInfo{"Current on AC L1", "mA", "current"}},
+	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4654, "current_ac2", 0.001, ValueInfo{"Current on AC L2", "mA", "current"}},
+	{0x5100, 0x00464800, 0x004655FF, 0x00, 0x4655, "current_ac3", 0.001, ValueInfo{"Current on AC L3", "mA", "current"}},
 	{0x5100, 0x00465700, 0x004657FF, 0x00, 0x4657, "frequency_ac", 0.01, ValueInfo{"AC frequency", "Hz", ""}},
 	{0x5100, 0x00491E00, 0x00495DFF, 0x00, 0x495B, "battery_temperature", 0.1, ValueInfo{"Temperature of battery", "°C", "temperature"}},
 
@@ -60,14 +60,14 @@ var valuesDef = []valDef{
 	{0x5180, 0x00214800, 0x002148FF, 0x00, 0x2148, "device_status", 0, ValueInfo{"Status of device", "", ""}},
 	{0x5180, 0x00416400, 0x004164FF, 0x00, 0x4164, "device_grid_relay", 0, ValueInfo{"Status of grid relay", "", ""}},
 
-	{0x5200, 0x00237700, 0x002377FF, 0x00, 0x2377, "device_temperature", 0.1, ValueInfo{"Temperature of device", "°C", "temperature"}},
+	{0x5200, 0x00237700, 0x002377FF, 0x00, 0x2377, "device_temperature", 0.01, ValueInfo{"Temperature of device", "°C", "temperature"}},
 
 	{0x5380, 0x00251E00, 0x00251EFF, 0x01, 0x251E, "power_dc1", 0, ValueInfo{"Power on DC Line 1", "W", "power"}},
 	{0x5380, 0x00251E00, 0x00251EFF, 0x02, 0x251E, "power_dc2", 0, ValueInfo{"Power on DC Line 2", "W", "power"}},
 	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x451F, "voltage_dc1", 0.01, ValueInfo{"Voltage on DC Line 1", "V", "voltage"}},
 	{0x5380, 0x00451F00, 0x004521FF, 0x02, 0x451F, "voltage_dc2", 0.01, ValueInfo{"Voltage on DC Line 2", "V", "voltage"}},
-	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x4521, "current_dc1", 0.001, ValueInfo{"Current on DC Line 1", "A", "current"}},
-	{0x5380, 0x00451F00, 0x004521FF, 0x02, 0x4521, "current_dc2", 0.001, ValueInfo{"Current on DC Line 2", "A", "current"}},
+	{0x5380, 0x00451F00, 0x004521FF, 0x01, 0x4521, "current_dc1", 0.001, ValueInfo{"Current on DC Line 1", "mA", "current"}},
+	{0x5380, 0x00451F00, 0x004521FF, 0x02, 0x4521, "current_dc2", 0.001, ValueInfo{"Current on DC Line 2", "mA", "current"}},
 
 	{0x5400, 0x00260100, 0x002622FF, 0x00, 0x2601, "energy_total", 0, ValueInfo{"Energy produced since installation", "Wh", "energy"}},
 	{0x5400, 0x00260100, 0x002622FF, 0x00, 0x2622, "energy_today", 0, ValueInfo{"Energy produced today", "Wh", "energy"}},
@@ -258,6 +258,10 @@ func parseValues(values []*net2.ResponseValue) map[string]interface{} {
 				if v, ok := value.(uint64); ok {
 					value = float64(v) * valueMap[key].Factor
 				} else if v, ok := value.(uint32); ok {
+					value = float64(v) * valueMap[key].Factor
+				} else if v, ok := value.(int64); ok {
+					value = float64(v) * valueMap[key].Factor
+				} else if v, ok := value.(int32); ok {
 					value = float64(v) * valueMap[key].Factor
 				}
 			}
