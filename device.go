@@ -196,7 +196,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 		values, err := d.requestValues(def)
 		if err != nil {
 			Log.Printf("failed to get values for %s: %v", d.address, err)
-			return nil, err
+			continue
 		}
 		if values == nil {
 			continue
