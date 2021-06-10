@@ -191,6 +191,11 @@ func init() {
 	for _, def := range emValuesDef {
 		emKeyMap[def.Key] = def
 	}
+
+	Log.Printf("valuesDef: %d", len(valuesDef))
+	Log.Printf("responseValues: %d", len(valuesDef))
+	Log.Printf("allRequests: %d", len(allRequests))
+	Log.Printf("emValuesDef: %d", len(emValuesDef))
 }
 
 // checkValue checks if response is a known value

@@ -37,6 +37,9 @@ func SetMulticastInterface(name string) (err error) {
 		listenInterface = nil
 	} else {
 		listenInterface, err = net.InterfaceByName(name)
+		if err != nil {
+			Log.Printf("multicast interface to %v", listenInterface)
+		}
 	}
 	return
 }
@@ -59,8 +62,10 @@ func DiscoverDevices(password string) ([]*Device, error) {
 	for _, ip := range addresses {
 		device, err := NewDevice(ip, password)
 		if err != nil {
+			Log.Printf("discover - skip ip %s: %v", ip, err)
 			continue
 		}
+		Log.Printf("found device at %s - Serial=%s - EM=%b", ip, device.SerialNumber(), device.IsEnergyMeter())
 		devices = append(devices, device)
 	}
 	return devices, nil
@@ -138,8 +143,10 @@ func (c *connection) listenLoop() {
 		err = pack.Read(b[:n])
 		if err != nil {
 			// invalid packet received -> retry
+			Log.Printf("received invalid package: %v", err)
 			continue
 		}
+		Log.Printf("received package [%s]", pack)
 
 		// store discovery responses
 		srcIp := src.IP.String()
@@ -147,10 +154,12 @@ func (c *connection) listenLoop() {
 			c.mutex.Lock()
 			c.discoveredDevices[srcIp] = &pack
 			c.mutex.Unlock()
+			Log.Printf("received discover package for %s", srcIp)
 		} else if _, ok := c.discoveredDevices[srcIp]; !ok {
 			c.mutex.Lock()
 			c.discoveredDevices[srcIp] = nil
 			c.mutex.Unlock()
+			Log.Printf("received package for not discovered device %s", srcIp)
 		}
 
 		select {
@@ -166,11 +175,13 @@ func (c *connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if _, ok := c.receivedBuffer[address.IP.String()]; !ok {
-		c.receivedBuffer[address.IP.String()] = make(chan *proto.Packet, 5)
+	srcIP := address.IP.String()
+	if _, ok := c.receivedBuffer[srcIP]; !ok {
+		c.receivedBuffer[srcIP] = make(chan *proto.Packet, 5)
+		Log.Printf("new receive channel for %s", srcIP)
 	}
 
-	return c.receivedBuffer[address.IP.String()]
+	return c.receivedBuffer[srcIP]
 }
 
 // clearReceived packages of the given address
@@ -187,6 +198,7 @@ func (c *connection) clearReceived(address *net.UDPAddr) {
 
 // sendPacket to the given address
 func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
+	Log.Printf("send package to %s: [%s]", address.IP.String(), packet)
 	_, err := c.socket.WriteToUDP(packet.Bytes(), address)
 	if err != nil {
 		return fmt.Errorf("failed to send packet: %w", err)
@@ -210,6 +222,7 @@ func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *pr
 func (c *connection) discover() ([]string, error) {
 	// send discover packet
 	for i := 0; i < 6; i++ {
+		Log.Printf("send discover packages (%d)", i)
 		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send packet: %w", err)

@@ -65,6 +65,7 @@ func NewDevice(address, password string) (*Device, error) {
 	pingData.AddParameter(0)
 	err = device.sendDeviceData(pingData)
 	if err != nil {
+		Log.Printf("no ping response for %s", address)
 		return nil, err
 	}
 
@@ -76,10 +77,12 @@ func NewDevice(address, password string) (*Device, error) {
 
 	switch c := net2Entry.Content.(type) {
 	case *net2.EnergyMeterPacket:
+		Log.Printf("new energy meter at %s - Serial=%s", address, c.Id.SerialNumber)
 		device.energyMeter = true
 		device.id = c.Id
 
 	case *net2.DeviceData:
+		Log.Printf("new inverter at %s - Serial=%s", address, c.Source.SerialNumber)
 		device.id = c.Source
 
 	default:
@@ -192,6 +195,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 	for _, def := range getAllRequests() {
 		values, err := d.requestValues(def)
 		if err != nil {
+			Log.Printf("failed to get values for %s: %v", d.address, err)
 			return nil, err
 		}
 		if values == nil {
@@ -226,6 +230,7 @@ func (d *Device) GetValueInfo(key string) ValueInfo {
 
 // login to device
 func (d *Device) login() error {
+	Log.Printf("login for %s", d.address)
 	loginData := net2.NewDeviceData(0xa0)
 	loginData.Command = 0x0c
 	loginData.Object = 0xfffd
@@ -263,6 +268,7 @@ func (d *Device) login() error {
 
 // logout to device
 func (d *Device) logout() {
+	Log.Printf("logout for %s", d.address)
 	request := net2.NewDeviceData(0xa0)
 	request.Command = 0x0e
 	request.Object = 0xfffd
@@ -275,6 +281,7 @@ func (d *Device) logout() {
 
 // requestValues from given definition
 func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
+	Log.Printf("requestValues for %s: 0x%X 0x%X 0x%X", d.address, def.Object, def.Start, def.End)
 	request := net2.NewDeviceData(0xa0)
 	request.Object = def.Object
 	request.AddParameter(def.Start)

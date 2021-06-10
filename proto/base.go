@@ -51,7 +51,7 @@ type Packet struct {
 }
 
 // String representation of this packet
-func (p *Packet) String() string {
+func (p Packet) String() string {
 	names := make([]string, 0, len(p.entries))
 	for _, e := range p.entries {
 		names = append(names, reflect.TypeOf(e).Elem().String())
