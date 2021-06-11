@@ -25,66 +25,11 @@ import (
 
 const listenAddress = "239.12.255.254:9522"
 
-var listenInterface *net.Interface
-var interfaceMutex sync.RWMutex
-
-// SetMulticastInterface for communication with devices
-func SetMulticastInterface(name string) (err error) {
-	interfaceMutex.Lock()
-	defer interfaceMutex.Unlock()
-
-	if name == "" {
-		listenInterface = nil
-	} else {
-		listenInterface, err = net.InterfaceByName(name)
-		if err != nil {
-			Log.Printf("multicast interface to %v", listenInterface)
-		}
-	}
-	return
-}
-
-var conn *connection
-
-// DiscoverDevices in network
-func DiscoverDevices(password string) ([]*Device, error) {
-	c, err := getConnection()
-	if err != nil {
-		return nil, err
-	}
-
-	addresses, err := c.discover()
-	if err != nil {
-		return nil, err
-	}
-
-	devices := make([]*Device, 0, len(addresses))
-	for _, ip := range addresses {
-		device, err := NewDevice(ip, password)
-		if err != nil {
-			Log.Printf("discover - skip ip %s: %v", ip, err)
-			continue
-		}
-		Log.Printf("found device at %s - Serial=%s - EM=%b", ip, device.SerialNumber(), device.IsEnergyMeter())
-		devices = append(devices, device)
-	}
-	return devices, nil
-}
-
-// getConnection instance and initialize it if first access
-func getConnection() (*connection, error) {
-	if conn == nil {
-		c, err := newConnection()
-		if err != nil {
-			return nil, err
-		}
-		conn = c
-	}
-	return conn, nil
-}
+var connectionMutex sync.Mutex
+var connections = make(map[string]*Connection)
 
 // Connection for communication with devices
-type connection struct {
+type Connection struct {
 	mutex sync.RWMutex
 
 	// multicast address
@@ -98,9 +43,17 @@ type connection struct {
 	discoveredDevices map[string]*proto.Packet
 }
 
-// newConnection creates a new connection object and starts listening
-func newConnection() (*connection, error) {
-	conn := connection{
+// NewConnection creates a new Connection object and starts listening
+func NewConnection(inf string) (*Connection, error) {
+	connectionMutex.Lock()
+	defer connectionMutex.Unlock()
+
+	// connection already known
+	if c, ok := connections[inf]; ok {
+		return c, nil
+	}
+
+	conn := Connection{
 		receivedBuffer:    make(map[string]chan *proto.Packet),
 		discoveredDevices: make(map[string]*proto.Packet),
 	}
@@ -111,9 +64,16 @@ func newConnection() (*connection, error) {
 		return nil, err
 	}
 
-	interfaceMutex.RLock()
+	// listen interface is optional
+	var listenInterface *net.Interface
+	if inf != "" {
+		listenInterface, err = net.InterfaceByName(inf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	conn.socket, err = net.ListenMulticastUDP("udp", listenInterface, conn.address)
-	interfaceMutex.RUnlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
@@ -125,11 +85,12 @@ func newConnection() (*connection, error) {
 
 	go conn.listenLoop()
 
+	connections[inf] = &conn
 	return &conn, nil
 }
 
 // listenLoop for received packets
-func (c *connection) listenLoop() {
+func (c *Connection) listenLoop() {
 	b := make([]byte, 2048)
 
 	for c.socket != nil {
@@ -171,7 +132,7 @@ func (c *connection) listenLoop() {
 }
 
 // getRecvChannel returns the receive channel of this address
-func (c *connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
+func (c *Connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -185,7 +146,7 @@ func (c *connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
 }
 
 // clearReceived packages of the given address
-func (c *connection) clearReceived(address *net.UDPAddr) {
+func (c *Connection) clearReceived(address *net.UDPAddr) {
 	ch := c.getRecvChannel(address)
 	for {
 		select {
@@ -197,7 +158,7 @@ func (c *connection) clearReceived(address *net.UDPAddr) {
 }
 
 // sendPacket to the given address
-func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
+func (c *Connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
 	Log.Printf("send package to %s: [%s]", address.IP.String(), packet)
 	_, err := c.socket.WriteToUDP(packet.Bytes(), address)
 	if err != nil {
@@ -207,7 +168,7 @@ func (c *connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) erro
 }
 
 // readPacket from received channel
-func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *proto.Packet {
+func (c *Connection) readPacket(address *net.UDPAddr, timeout time.Duration) *proto.Packet {
 	ch := c.getRecvChannel(address)
 
 	select {
@@ -218,12 +179,32 @@ func (c *connection) readPacket(address *net.UDPAddr, timeout time.Duration) *pr
 	}
 }
 
+// DiscoverDevices in Connection
+func (c *Connection) DiscoverDevices(password string) ([]*Device, error) {
+	addresses, err := c.discover()
+	if err != nil {
+		return nil, err
+	}
+
+	devices := make([]*Device, 0, len(addresses))
+	for _, ip := range addresses {
+		device, err := c.NewDevice(ip, password)
+		if err != nil {
+			Log.Printf("discover - skip ip %s: %v", ip, err)
+			continue
+		}
+		Log.Printf("found device at %s - Serial=%s - EM=%b", ip, device.SerialNumber(), device.IsEnergyMeter())
+		devices = append(devices, device)
+	}
+	return devices, nil
+}
+
 // discover reachable devices
-func (c *connection) discover() ([]string, error) {
+func (c *Connection) discover() ([]string, error) {
 	// send discover packet
 	for i := 0; i < 6; i++ {
 		Log.Printf("send discover packages (%d)", i)
-		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), conn.address)
+		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), c.address)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send packet: %w", err)
 		}

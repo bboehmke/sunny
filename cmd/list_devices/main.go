@@ -23,7 +23,12 @@ import (
 func main() {
 	// sunny.Log = log.Default()
 
-	devices, err := sunny.DiscoverDevices("0000")
+	connection, err := sunny.NewConnection("")
+	if err != nil {
+		panic(err)
+	}
+
+	devices, err := connection.DiscoverDevices("0000")
 	if err != nil {
 		panic(err)
 	}

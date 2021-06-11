@@ -30,8 +30,8 @@ type Device struct {
 	// password for inverter communication
 	password string
 
-	// connection instance for communication
-	conn *connection
+	// Connection instance for communication
+	conn *Connection
 
 	// device information
 	energyMeter bool
@@ -39,8 +39,9 @@ type Device struct {
 }
 
 // NewDevice creates a new device instance
-func NewDevice(address, password string) (*Device, error) {
+func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	device := Device{
+		conn:     c,
 		password: password,
 	}
 
@@ -50,14 +51,8 @@ func NewDevice(address, password string) (*Device, error) {
 		return nil, fmt.Errorf("failed to resolve udp address: %w", err)
 	}
 
-	// get connection instance
-	device.conn, err = getConnection()
-	if err != nil {
-		return nil, err
-	}
-
 	// clear message buffer
-	conn.clearReceived(device.address)
+	device.conn.clearReceived(device.address)
 
 	// send ping
 	pingData := net2.NewDeviceData(0xa0)
@@ -350,10 +345,10 @@ func (d *Device) sendDeviceData(data *net2.DeviceData) error {
 		Content: data,
 	})
 
-	return conn.sendPacket(d.address, &pack)
+	return d.conn.sendPacket(d.address, &pack)
 }
 
-// readNet2 read package from connection
+// readNet2 read package from Connection
 func (d *Device) readNet2(timeout time.Duration) (*proto.SmaNet2PacketEntry, error) {
 	packet := d.conn.readPacket(d.address, timeout)
 	if packet == nil {
