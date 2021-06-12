@@ -87,6 +87,11 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	return &device, nil
 }
 
+// SetPassword for device communication
+func (d *Device) SetPassword(pw string) {
+	d.password = pw
+}
+
 // SerialNumber returns the serial number of the device
 func (d *Device) SerialNumber() uint32 {
 	return d.id.SerialNumber
