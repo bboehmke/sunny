@@ -15,46 +15,54 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"gitlab.com/bboehmke/sunny"
 )
 
 func main() {
-	// sunny.Log = log.Default()
+	//sunny.Log = log.Default()
 
-	connection, err := sunny.NewConnection("")
-	if err != nil {
-		panic(err)
-	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	devices := make(chan *sunny.Device, 10)
 
-	devices, err := connection.DiscoverDevices("0000")
-	if err != nil {
-		panic(err)
-	}
-
-	for _, device := range devices {
-		fmt.Printf("==================================================\n")
-		fmt.Printf("IP:             %s\n", device.Address())
-		fmt.Printf("Serial:         %d\n", device.SerialNumber())
-		fmt.Printf("Is EnergyMeter: %v\n", device.IsEnergyMeter())
-		fmt.Printf("--------------------------------------------------\n")
-		name, err := device.GetDeviceName()
-		if err != nil {
-			fmt.Printf("ERROR: %v\n", err)
-		} else {
-			fmt.Printf("Name: %s\n", name)
-		}
-		fmt.Printf("--------------------------------------------------\n")
-		values, err := device.GetValues()
-		if err != nil {
-			fmt.Printf("ERROR: %v\n", err)
-		} else {
-			for key, value := range values {
-				fmt.Printf("%s: %v %s\n", key, value, device.GetValueInfo(key).Unit)
+	go func() {
+		for device := range devices {
+			fmt.Printf("==================================================\n")
+			fmt.Printf("IP:             %s\n", device.Address())
+			fmt.Printf("Serial:         %d\n", device.SerialNumber())
+			fmt.Printf("Is EnergyMeter: %v\n", device.IsEnergyMeter())
+			fmt.Printf("--------------------------------------------------\n")
+			name, err := device.GetDeviceName()
+			if err != nil {
+				fmt.Printf("ERROR: %v\n", err)
+			} else {
+				fmt.Printf("Name: %s\n", name)
 			}
+			fmt.Printf("--------------------------------------------------\n")
+			values, err := device.GetValues()
+			if err != nil {
+				fmt.Printf("ERROR: %v\n", err)
+			} else {
+				for key, value := range values {
+					fmt.Printf("%s: %v %s\n", key, value, device.GetValueInfo(key).Unit)
+				}
+			}
+			fmt.Printf("==================================================\n")
+			fmt.Println()
 		}
-		fmt.Printf("==================================================\n")
-		fmt.Println()
-	}
+		wg.Done()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	connection, _ := sunny.NewConnection("")
+	connection.DiscoverDevices(ctx, devices, "0000")
+	cancel()
+
+	close(devices)
+	wg.Wait()
 }

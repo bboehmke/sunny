@@ -39,8 +39,10 @@ type Connection struct {
 
 	// buffer for received packet
 	receivedBuffer map[string]chan *proto.Packet
-	// list of discovered devices
-	discoveredDevices map[string]*proto.Packet
+
+	// interface for device discovery
+	discoverMutex     sync.Mutex
+	discoveredDevices chan string
 }
 
 // NewConnection creates a new Connection object and starts listening
@@ -55,7 +57,7 @@ func NewConnection(inf string) (*Connection, error) {
 
 	conn := Connection{
 		receivedBuffer:    make(map[string]chan *proto.Packet),
-		discoveredDevices: make(map[string]*proto.Packet),
+		discoveredDevices: make(chan string, 5),
 	}
 
 	var err error
@@ -109,18 +111,10 @@ func (c *Connection) listenLoop() {
 		}
 		Log.Printf("received package [%s]", pack)
 
-		// store discovery responses
-		srcIp := src.IP.String()
-		if pack.GetEntry(proto.DiscoveryRequestPacketEntryTag) != nil {
-			c.mutex.Lock()
-			c.discoveredDevices[srcIp] = &pack
-			c.mutex.Unlock()
-			Log.Printf("received discover package for %s", srcIp)
-		} else if _, ok := c.discoveredDevices[srcIp]; !ok {
-			c.mutex.Lock()
-			c.discoveredDevices[srcIp] = nil
-			c.mutex.Unlock()
-			Log.Printf("received package for not discovered device %s", srcIp)
+		// forward discover packages
+		select {
+		case c.discoveredDevices <- src.IP.String():
+		default:
 		}
 
 		select {
@@ -177,48 +171,4 @@ func (c *Connection) readPacket(address *net.UDPAddr, timeout time.Duration) *pr
 	case <-time.After(timeout):
 		return nil
 	}
-}
-
-// DiscoverDevices in Connection
-func (c *Connection) DiscoverDevices(password string) ([]*Device, error) {
-	addresses, err := c.discover()
-	if err != nil {
-		return nil, err
-	}
-
-	devices := make([]*Device, 0, len(addresses))
-	for _, ip := range addresses {
-		device, err := c.NewDevice(ip, password)
-		if err != nil {
-			Log.Printf("discover - skip ip %s: %v", ip, err)
-			continue
-		}
-		Log.Printf("found device at %s - Serial=%s - EM=%b", ip, device.SerialNumber(), device.IsEnergyMeter())
-		devices = append(devices, device)
-	}
-	return devices, nil
-}
-
-// discover reachable devices
-func (c *Connection) discover() ([]string, error) {
-	// send discover packet
-	for i := 0; i < 6; i++ {
-		Log.Printf("send discover packages (%d)", i)
-		_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), c.address)
-		if err != nil {
-			return nil, fmt.Errorf("failed to send packet: %w", err)
-		}
-
-		// wait some time for responses
-		time.Sleep(time.Millisecond * 500)
-	}
-
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	deviceAddresses := make([]string, 0, len(c.discoveredDevices))
-	for ip := range c.discoveredDevices {
-		deviceAddresses = append(deviceAddresses, ip)
-	}
-
-	return deviceAddresses, nil
 }
