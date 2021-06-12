@@ -22,14 +22,8 @@ import (
 	"gitlab.com/bboehmke/sunny/proto"
 )
 
-// DiscoverDevicesSimple in Connection with a simpler interface
-func (c *Connection) DiscoverDevicesSimple(inf, password string) ([]*Device, error) {
-	// get connection for interface
-	connection, err := NewConnection(inf)
-	if err != nil {
-		return nil, err
-	}
-
+// SimpleDiscoverDevices in Connection with a simpler interface
+func (c *Connection) SimpleDiscoverDevices(password string) []*Device {
 	// add found devices to list
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -45,12 +39,12 @@ func (c *Connection) DiscoverDevicesSimple(inf, password string) ([]*Device, err
 
 	// search for devices
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	connection.DiscoverDevices(ctx, devices, password)
+	c.DiscoverDevices(ctx, devices, password)
 	cancel()
 
 	close(devices)
 	wg.Wait()
-	return deviceList, nil
+	return deviceList
 }
 
 // DiscoverDevices in Connection
