@@ -106,10 +106,10 @@ func (c *Connection) listenLoop() {
 		err = pack.Read(b[:n])
 		if err != nil {
 			// invalid packet received -> retry
-			Log.Printf("received invalid package: %v", err)
+			Log.Printf("received invalid package from %s: %v", src.IP.String(), err)
 			continue
 		}
-		Log.Printf("received package [%s]", pack)
+		Log.Printf("received package from %s [%s]", src.IP.String(), pack)
 
 		// forward discover packages
 		select {
@@ -133,7 +133,6 @@ func (c *Connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
 	srcIP := address.IP.String()
 	if _, ok := c.receivedBuffer[srcIP]; !ok {
 		c.receivedBuffer[srcIP] = make(chan *proto.Packet, 5)
-		Log.Printf("new receive channel for %s", srcIP)
 	}
 
 	return c.receivedBuffer[srcIP]

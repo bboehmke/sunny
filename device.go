@@ -72,12 +72,12 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 
 	switch c := net2Entry.Content.(type) {
 	case *net2.EnergyMeterPacket:
-		Log.Printf("new energy meter at %s - Serial=%s", address, c.Id.SerialNumber)
+		Log.Printf("new energy meter at %s - Serial=%d", address, c.Id.SerialNumber)
 		device.energyMeter = true
 		device.id = c.Id
 
 	case *net2.DeviceData:
-		Log.Printf("new inverter at %s - Serial=%s", address, c.Source.SerialNumber)
+		Log.Printf("new inverter at %s - Serial=%d", address, c.Source.SerialNumber)
 		device.id = c.Source
 
 	default:
