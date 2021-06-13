@@ -52,51 +52,40 @@ func (c *Connection) DiscoverDevices(ctx context.Context, devices chan *Device, 
 	c.discoverMutex.Lock()
 	defer c.discoverMutex.Unlock()
 
-	// handle responses
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		knownIps := make(map[string]*Device)
-		var knownMutex sync.Mutex
+	knownIps := make(map[string]*Device)
+	var knownMutex sync.Mutex
+	ticker := time.NewTicker(time.Millisecond * 500)
 
-	loop:
-		for {
-			select {
-			case <-ctx.Done():
-				break loop
-
-			case ip := <-c.discoveredDevices:
-				wg.Add(1)
-				go func(ip string) {
-					knownMutex.Lock()
-					defer knownMutex.Unlock()
-
-					if _, ok := knownIps[ip]; !ok {
-						device, err := c.NewDevice(ip, password)
-						if err != nil {
-							Log.Printf("discover - skip ip %s: %v", ip, err)
-						} else {
-							Log.Printf("found device %s at %s", device.SerialNumber(), ip)
-							knownIps[ip] = device
-							devices <- device
-						}
-					}
-
-					wg.Done()
-				}(ip)
-			}
-		}
-
-		wg.Done()
-	}()
-
-	// send discover packages
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break loop
-		case <-time.After(time.Millisecond * 500):
+
+		// handle received responses
+		case ip := <-c.discoveredDevices:
+			wg.Add(1)
+			go func(ip string) {
+				knownMutex.Lock()
+				defer knownMutex.Unlock()
+
+				if _, ok := knownIps[ip]; !ok {
+					device, err := c.NewDevice(ip, password)
+					if err != nil {
+						Log.Printf("discover - skip ip %s: %v", ip, err)
+					} else {
+						Log.Printf("found device %s at %s", device.SerialNumber(), ip)
+						knownIps[ip] = device
+						devices <- device
+					}
+				}
+
+				wg.Done()
+			}(ip)
+
+		// send discover packages
+		case <-ticker.C:
 			// send discover packet
 			Log.Printf("send discover package")
 			_, err := c.socket.WriteTo(proto.NewDiscoveryRequest().Bytes(), c.address)
@@ -105,5 +94,6 @@ loop:
 			}
 		}
 	}
+	ticker.Stop()
 	wg.Wait()
 }
