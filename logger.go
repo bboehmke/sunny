@@ -19,10 +19,12 @@ var Log Logger = new(NopeLogger)
 
 // Logger interface for trace logger
 type Logger interface {
+	// Printf print line to log
 	Printf(format string, v ...interface{})
 }
 
 // NopeLogger implements Logger without any action
 type NopeLogger struct{}
 
+// Printf print line to log
 func (n NopeLogger) Printf(format string, v ...interface{}) {}
