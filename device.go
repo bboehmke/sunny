@@ -160,7 +160,7 @@ func (d *Device) GetDeviceName() (string, error) {
 }
 
 // GetValues from device
-func (d *Device) GetValues() (map[string]interface{}, error) {
+func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
 
@@ -191,7 +191,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 	}
 
 	// request all values and join to one map
-	valuesMap := make(map[string]interface{})
+	valuesMap := make(map[ValueKey]interface{})
 	for _, def := range getAllRequests() {
 		values, err := d.requestValues(def)
 		if err != nil {
@@ -213,7 +213,7 @@ func (d *Device) GetValues() (map[string]interface{}, error) {
 }
 
 // GetValueDescription for value
-func (d *Device) GetValueDescription(key string) string {
+func (d *Device) GetValueDescription(key ValueKey) string {
 	if d.energyMeter {
 		return emKeyMap[key].Info.Description
 	}
@@ -221,7 +221,7 @@ func (d *Device) GetValueDescription(key string) string {
 }
 
 // GetValueInfo for value
-func (d *Device) GetValueInfo(key string) ValueInfo {
+func (d *Device) GetValueInfo(key ValueKey) ValueInfo {
 	if d.energyMeter {
 		return emKeyMap[key].Info
 	}
@@ -280,7 +280,7 @@ func (d *Device) logout() {
 }
 
 // requestValues from given definition
-func (d *Device) requestValues(def valDef) (map[string]interface{}, error) {
+func (d *Device) requestValues(def valDef) (map[ValueKey]interface{}, error) {
 	Log.Printf("requestValues for %s: 0x%X 0x%X 0x%X", d.address, def.Object, def.Start, def.End)
 	request := net2.NewDeviceData(0xa0)
 	request.Object = def.Object
