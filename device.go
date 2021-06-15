@@ -21,6 +21,7 @@ import (
 
 	"gitlab.com/bboehmke/sunny/proto"
 	"gitlab.com/bboehmke/sunny/proto/net2"
+	"gitlab.com/bboehmke/sunny/value_def"
 )
 
 // Device instance for communication with inverter and energy meter
@@ -118,7 +119,7 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 		return 0, err
 	}
 
-	values, err := d.requestValues(getRequest("device_class"))
+	values, err := d.requestValues(value_def.GetInverterRequest("device_class"))
 	if err != nil {
 		return 0, err
 	}
@@ -144,7 +145,7 @@ func (d *Device) GetDeviceName() (string, error) {
 		return "", err
 	}
 
-	values, err := d.requestValues(getRequest("device_name"))
+	values, err := d.requestValues(value_def.GetInverterRequest("device_name"))
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +161,7 @@ func (d *Device) GetDeviceName() (string, error) {
 }
 
 // GetValues from device
-func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
+func (d *Device) GetValues() (map[value_def.ValueID]interface{}, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
 
@@ -179,7 +180,7 @@ func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
 				err = fmt.Errorf("invalid packet received")
 				continue
 			}
-			return emKeyValues(packet.GetValues()), nil
+			return value_def.ConvertEnergyMeterValues(packet.GetValues()), nil
 		}
 		return nil, err
 	}
@@ -191,8 +192,8 @@ func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
 	}
 
 	// request all values and join to one map
-	valuesMap := make(map[ValueKey]interface{})
-	for _, def := range getAllRequests() {
+	valuesMap := make(map[value_def.ValueID]interface{})
+	for _, def := range value_def.GetAllInverterRequests() {
 		values, err := d.requestValues(def)
 		if err != nil {
 			Log.Printf("failed to get values for %s: %v", d.address, err)
@@ -201,8 +202,8 @@ func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
 		if values == nil {
 			continue
 		}
-		for key, value := range values {
-			valuesMap[key] = value
+		for id, value := range values {
+			valuesMap[id] = value
 		}
 	}
 
@@ -210,22 +211,6 @@ func (d *Device) GetValues() (map[ValueKey]interface{}, error) {
 	d.logout()
 
 	return valuesMap, nil
-}
-
-// GetValueDescription for value
-func (d *Device) GetValueDescription(key ValueKey) string {
-	if d.energyMeter {
-		return emKeyMap[key].Info.Description
-	}
-	return valueMap[key].Info.Description
-}
-
-// GetValueInfo for value
-func (d *Device) GetValueInfo(key ValueKey) ValueInfo {
-	if d.energyMeter {
-		return emKeyMap[key].Info
-	}
-	return valueMap[key].Info
 }
 
 // login to device
@@ -280,7 +265,7 @@ func (d *Device) logout() {
 }
 
 // requestValues from given definition
-func (d *Device) requestValues(def valDef) (map[ValueKey]interface{}, error) {
+func (d *Device) requestValues(def value_def.InverterValuesDef) (map[value_def.ValueID]interface{}, error) {
 	Log.Printf("requestValues for %s: 0x%X 0x%X 0x%X", d.address, def.Object, def.Start, def.End)
 	request := net2.NewDeviceData(0xa0)
 	request.Object = def.Object
@@ -299,7 +284,7 @@ func (d *Device) requestValues(def valDef) (map[ValueKey]interface{}, error) {
 		return nil, fmt.Errorf("failed to get values")
 	}
 
-	return parseValues(response.ResponseValues), nil
+	return value_def.ParseInverterValues(response.ResponseValues), nil
 }
 
 // sendDeviceDataResponse sends the package and wait for response
