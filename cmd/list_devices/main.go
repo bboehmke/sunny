@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"gitlab.com/bboehmke/sunny"
-	"gitlab.com/bboehmke/sunny/value_def"
 )
 
 func main() {
@@ -52,9 +51,9 @@ func main() {
 				for key, value := range values {
 					switch value.(type) {
 					case float64:
-						fmt.Printf("%s: %f %s\n", key, value, value_def.GetValueInfo(key).Unit)
+						fmt.Printf("%s: %f %s\n", key, value, sunny.GetValueInfo(key).Unit)
 					default:
-						fmt.Printf("%s: %v %s\n", key, value, value_def.GetValueInfo(key).Unit)
+						fmt.Printf("%s: %v %s\n", key, value, sunny.GetValueInfo(key).Unit)
 					}
 				}
 			}
