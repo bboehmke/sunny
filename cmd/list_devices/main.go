@@ -49,7 +49,12 @@ func main() {
 				fmt.Printf("ERROR: %v\n", err)
 			} else {
 				for key, value := range values {
-					fmt.Printf("%s: %v %s\n", key, value, device.GetValueInfo(key).Unit)
+					switch value.(type) {
+					case float64:
+						fmt.Printf("%s: %f %s\n", key, value, sunny.GetValueInfo(key).Unit)
+					default:
+						fmt.Printf("%s: %v %s\n", key, value, sunny.GetValueInfo(key).Unit)
+					}
 				}
 			}
 			fmt.Printf("==================================================\n")
