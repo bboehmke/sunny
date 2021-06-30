@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -23,7 +24,10 @@ import (
 	"gitlab.com/bboehmke/sunny"
 )
 
+var inf = flag.String("inf", "", "Interface devices are connected to")
+
 func main() {
+	flag.Parse()
 	//sunny.Log = log.Default()
 
 	var wg sync.WaitGroup
@@ -64,7 +68,10 @@ func main() {
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	connection, _ := sunny.NewConnection("")
+	connection, err := sunny.NewConnection(*inf)
+	if err != nil {
+		panic(err)
+	}
 	connection.DiscoverDevices(ctx, devices, "0000")
 	cancel()
 
