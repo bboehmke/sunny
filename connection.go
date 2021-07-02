@@ -15,6 +15,7 @@
 package sunny
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -161,13 +162,13 @@ func (c *Connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) erro
 }
 
 // readPacket from received channel
-func (c *Connection) readPacket(address *net.UDPAddr, timeout time.Duration) *proto.Packet {
+func (c *Connection) readPacket(address *net.UDPAddr, ctx context.Context) *proto.Packet {
 	ch := c.getRecvChannel(address)
 
 	select {
 	case pack := <-ch:
 		return pack
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		return nil
 	}
 }

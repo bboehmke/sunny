@@ -15,6 +15,7 @@
 package sunny
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -58,33 +59,44 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	pingData := net2.NewDeviceData(0xa0)
 	pingData.AddParameter(0)
 	pingData.AddParameter(0)
-	err = device.sendDeviceData(pingData)
-	if err != nil {
-		Log.Printf("no ping response for %s", address)
-		return nil, err
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	for {
+		// check for timeout
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("no ping response for %s", address)
+		default:
+		}
+
+		err = device.sendDeviceData(pingData)
+		if err != nil {
+			Log.Printf("failed to send ping request for %s", address)
+			return nil, err
+		}
+
+		// wait for receive
+		receiveCtx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		net2Entry, err := device.readNet2(receiveCtx)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+
+		switch c := net2Entry.Content.(type) {
+		case *net2.EnergyMeterPacket:
+			Log.Printf("new energy meter at %s - Serial=%d", address, c.Id.SerialNumber)
+			device.energyMeter = true
+			device.id = c.Id
+			return &device, nil
+
+		case *net2.DeviceData:
+			Log.Printf("new inverter at %s - Serial=%d", address, c.Source.SerialNumber)
+			device.id = c.Source
+			return &device, nil
+		}
 	}
-
-	// wait for receive
-	net2Entry, err := device.readNet2(time.Second * 3)
-	if err != nil {
-		return nil, err
-	}
-
-	switch c := net2Entry.Content.(type) {
-	case *net2.EnergyMeterPacket:
-		Log.Printf("new energy meter at %s - Serial=%d", address, c.Id.SerialNumber)
-		device.energyMeter = true
-		device.id = c.Id
-
-	case *net2.DeviceData:
-		Log.Printf("new inverter at %s - Serial=%d", address, c.Source.SerialNumber)
-		device.id = c.Source
-
-	default:
-		return nil, fmt.Errorf("received unknown net2 packet from %s", address)
-	}
-
-	return &device, nil
 }
 
 // SetPassword for device communication
@@ -113,6 +125,9 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 		return 1, nil
 	}
 
+	// clear queue -> get fresh data
+	d.conn.clearReceived(d.address)
+
 	err := d.login()
 	if err != nil {
 		return 0, err
@@ -122,9 +137,6 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	// clear queue -> get fresh data
-	d.conn.clearReceived(d.address)
 
 	d.logout()
 	if val, ok := values[DeviceClass]; ok {
@@ -139,6 +151,9 @@ func (d *Device) GetDeviceName() (string, error) {
 		return "Energy Meter", nil
 	}
 
+	// clear queue -> get fresh data
+	d.conn.clearReceived(d.address)
+
 	err := d.login()
 	if err != nil {
 		return "", err
@@ -148,9 +163,6 @@ func (d *Device) GetDeviceName() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	// clear queue -> get fresh data
-	d.conn.clearReceived(d.address)
 
 	d.logout()
 	if val, ok := values[DeviceName]; ok {
@@ -165,23 +177,29 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	d.conn.clearReceived(d.address)
 
 	if d.energyMeter {
-		start := time.Now()
-		var err error
-		var net2Entry *proto.SmaNet2PacketEntry
-		for time.Since(start) < time.Second*2 {
-			net2Entry, err = d.readNet2(time.Second * 2)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+
+		for {
+			// check for timeout
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("invalid packet received")
+			default:
+			}
+
+			// wait for received packet
+			net2Entry, err := d.readNet2(ctx)
 			if err != nil {
 				continue
 			}
 
 			packet, ok := net2Entry.Content.(*net2.EnergyMeterPacket)
 			if !ok {
-				err = fmt.Errorf("invalid packet received")
 				continue
 			}
 			return convertEnergyMeterValues(packet.GetValues()), nil
 		}
-		return nil, err
 	}
 
 	// login to device
@@ -239,7 +257,9 @@ func (d *Device) login() error {
 	}
 	loginData.Data = passwordData
 
-	response, err := d.sendDeviceDataResponse(loginData, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	response, err := d.sendDeviceDataResponse(loginData, time.Millisecond*500, ctx)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
 	}
@@ -271,7 +291,9 @@ func (d *Device) requestValues(def InverterValuesDef) (map[ValueID]interface{}, 
 	request.AddParameter(def.Start)
 	request.AddParameter(def.End)
 
-	response, err := d.sendDeviceDataResponse(request, time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	response, err := d.sendDeviceDataResponse(request, time.Millisecond*500, ctx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -288,16 +310,25 @@ func (d *Device) requestValues(def InverterValuesDef) (map[ValueID]interface{}, 
 
 // sendDeviceDataResponse sends the package and wait for response
 func (d *Device) sendDeviceDataResponse(data *net2.DeviceData,
-	timeout time.Duration) (*net2.DeviceData, error) {
+	resendInterval time.Duration, ctx context.Context) (*net2.DeviceData, error) {
+	for {
+		// stop after timeout
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("no packet received in timeout")
+		default:
+		}
 
-	err := d.sendDeviceData(data)
-	if err != nil {
-		return nil, err
-	}
+		// send request
+		err := d.sendDeviceData(data)
+		if err != nil {
+			return nil, err
+		}
 
-	startTime := time.Now()
-	for time.Since(startTime) < timeout {
-		entry, err := d.readNet2(timeout)
+		// wait for response
+		receiveCtx, cancel := context.WithTimeout(ctx, resendInterval)
+		entry, err := d.readNet2(receiveCtx)
+		cancel()
 		if err != nil {
 			continue // no valid packet
 		}
@@ -313,8 +344,6 @@ func (d *Device) sendDeviceDataResponse(data *net2.DeviceData,
 
 		return responseData, nil
 	}
-
-	return nil, fmt.Errorf("no packet received in timeout")
 }
 
 // sendDeviceData sends the package
@@ -338,8 +367,8 @@ func (d *Device) sendDeviceData(data *net2.DeviceData) error {
 }
 
 // readNet2 read package from Connection
-func (d *Device) readNet2(timeout time.Duration) (*proto.SmaNet2PacketEntry, error) {
-	packet := d.conn.readPacket(d.address, timeout)
+func (d *Device) readNet2(ctx context.Context) (*proto.SmaNet2PacketEntry, error) {
+	packet := d.conn.readPacket(d.address, ctx)
 	if packet == nil {
 		return nil, fmt.Errorf("device does not respond at %s", d.address.IP.String())
 	}
