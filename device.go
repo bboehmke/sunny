@@ -291,7 +291,7 @@ func (d *Device) requestValues(def InverterValuesDef) (map[ValueID]interface{}, 
 	request.AddParameter(def.Start)
 	request.AddParameter(def.End)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	response, err := d.sendDeviceDataResponse(request, time.Millisecond*500, ctx)
 	cancel()
 	if err != nil {
@@ -327,22 +327,22 @@ func (d *Device) sendDeviceDataResponse(data *net2.DeviceData,
 
 		// wait for response
 		receiveCtx, cancel := context.WithTimeout(ctx, resendInterval)
-		entry, err := d.readNet2(receiveCtx)
-		cancel()
-		if err != nil {
-			continue // no valid packet
-		}
 
-		responseData, ok := entry.Content.(*net2.DeviceData)
-		if !ok {
-			continue // no device data packet
-		}
+		// wait for package until timeout
+		for {
+			select {
+			case <-receiveCtx.Done():
+				break
+			default:
+			}
 
-		if responseData.PacketID != data.PacketID {
-			continue // no response to request
+			responseData, err := d.readNet2DeviceData(receiveCtx, data.PacketID)
+			if err != nil {
+				continue // no valid packet
+			}
+			cancel()
+			return responseData, nil
 		}
-
-		return responseData, nil
 	}
 }
 
@@ -379,4 +379,23 @@ func (d *Device) readNet2(ctx context.Context) (*proto.SmaNet2PacketEntry, error
 	}
 
 	return entry.(*proto.SmaNet2PacketEntry), nil
+}
+
+// readNet2DeviceData read package from Connection
+func (d *Device) readNet2DeviceData(ctx context.Context, pkgId uint16) (*net2.DeviceData, error) {
+	entry, err := d.readNet2(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	responseData, ok := entry.Content.(*net2.DeviceData)
+	if !ok {
+		return nil, fmt.Errorf("invalid data received from %s", d.address.IP.String())
+	}
+
+	if responseData.PacketID != pkgId {
+		return nil, fmt.Errorf("invalid package received from %s (%d)", d.address.IP.String(), responseData.PacketID)
+	}
+
+	return responseData, nil
 }
