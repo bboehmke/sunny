@@ -77,11 +77,11 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 		}
 
 		// wait for receive
-		receiveCtx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		receiveCtx, receiveCancel := context.WithTimeout(ctx, time.Millisecond*500)
 		net2Entry, err := device.readNet2(receiveCtx)
-		cancel()
+		receiveCancel()
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		switch c := net2Entry.Content.(type) {
