@@ -128,7 +128,7 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
 
-	err := d.login()
+	err := d.loginRetry(3)
 	if err != nil {
 		return 0, err
 	}
@@ -154,7 +154,7 @@ func (d *Device) GetDeviceName() (string, error) {
 	// clear queue -> get fresh data
 	d.conn.clearReceived(d.address)
 
-	err := d.login()
+	err := d.loginRetry(3)
 	if err != nil {
 		return "", err
 	}
@@ -203,7 +203,7 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	}
 
 	// login to device
-	err := d.login()
+	err := d.loginRetry(3)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +228,15 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	d.logout()
 
 	return valuesMap, nil
+}
+
+func (d *Device) loginRetry(trys int) (err error) {
+	for i := 0; i < trys; i++ {
+		if err = d.login(); err == nil {
+			return
+		}
+	}
+	return
 }
 
 // login to device
