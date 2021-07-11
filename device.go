@@ -128,72 +128,69 @@ func (d *Device) IsEnergyMeter() bool {
 	return d.energyMeter
 }
 
-// GetDeviceClass returns the class identifier of the device (1 = energy meter)
-func (d *Device) GetDeviceClass() (uint32, error) {
-	if d.energyMeter {
-		return 1, nil
-	}
-
-	// clear queue -> get fresh data
-	d.clearReceiver()
-
-	err := d.loginRetry(3)
-	if err != nil {
-		return 0, err
-	}
-
-	values, err := d.requestValues(getInverterRequest(DeviceClass))
-	if err != nil {
-		return 0, err
-	}
-
-	d.logout()
-	if val, ok := values[DeviceClass]; ok {
-		return val.(uint32), nil
-	}
-	return 0, fmt.Errorf("no device class")
+// GetValue from inverter and returns nil if value does not exist
+// Note: to request multiple values use GetValues
+func (d *Device) GetValue(id ValueID) (interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	return d.GetValueCtx(ctx, id)
 }
 
-// GetDeviceName returns the name of the device
-func (d *Device) GetDeviceName() (string, error) {
+// GetValueCtx from inverter and returns nil if value does not exist
+// Note: to request multiple values use GetValues
+func (d *Device) GetValueCtx(ctx context.Context, id ValueID) (interface{}, error) {
 	if d.energyMeter {
-		return "Energy Meter", nil
+		// handle some fixed energy meter values
+		if id == DeviceClass {
+			return 1, nil
+		}
+		if id == DeviceName {
+			return "Energy Meter", nil
+		}
+
+		// no selective request for energy meter -> request all
+		values, err := d.GetValuesCtx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return values[id], nil
 	}
 
 	// clear queue -> get fresh data
 	d.clearReceiver()
 
-	err := d.loginRetry(3)
+	err := d.loginRetry(ctx, 3)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
-	values, err := d.requestValues(getInverterRequest(DeviceName))
+	values, err := d.requestValues(ctx, getInverterRequest(id))
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	d.logout()
-	if val, ok := values[DeviceName]; ok {
-		return val.(string), nil
-	}
-	return "", fmt.Errorf("no device name")
+	return values[id], nil
 }
 
 // GetValues from device
 func (d *Device) GetValues() (map[ValueID]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	return d.GetValuesCtx(ctx)
+}
+
+// GetValuesCtx from device
+func (d *Device) GetValuesCtx(ctx context.Context) (map[ValueID]interface{}, error) {
 	// clear queue -> get fresh data
 	d.clearReceiver()
 
 	if d.energyMeter {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer cancel()
-
 		for {
 			// check for timeout
 			select {
 			case <-ctx.Done():
-				return nil, fmt.Errorf("invalid packet received")
+				return nil, fmt.Errorf("energy meter does not respond")
 			default:
 			}
 
@@ -212,7 +209,7 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	}
 
 	// login to device
-	err := d.loginRetry(3)
+	err := d.loginRetry(ctx, 3)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +217,7 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	// request all values and join to one map
 	valuesMap := make(map[ValueID]interface{})
 	for _, def := range getAllInverterRequests() {
-		values, err := d.requestValues(def)
+		values, err := d.requestValues(ctx, def)
 		if err != nil {
 			Log.Printf("failed to get values for %s: %v", d.address, err)
 			continue
@@ -239,9 +236,9 @@ func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	return valuesMap, nil
 }
 
-func (d *Device) loginRetry(trys int) (err error) {
+func (d *Device) loginRetry(ctx context.Context, trys int) (err error) {
 	for i := 0; i < trys; i++ {
-		if err = d.login(); err == nil {
+		if err = d.login(ctx); err == nil {
 			return
 		}
 	}
@@ -249,7 +246,7 @@ func (d *Device) loginRetry(trys int) (err error) {
 }
 
 // login to device
-func (d *Device) login() error {
+func (d *Device) login(ctx context.Context) error {
 	Log.Printf("login for %s", d.address)
 	loginData := net2.NewDeviceData(0xa0)
 	loginData.Command = 0x0c
@@ -275,9 +272,7 @@ func (d *Device) login() error {
 	}
 	loginData.Data = passwordData
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	response, err := d.sendDeviceDataResponse(loginData, time.Millisecond*500, ctx)
-	cancel()
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
 	}
@@ -302,16 +297,14 @@ func (d *Device) logout() {
 }
 
 // requestValues from given definition
-func (d *Device) requestValues(def InverterValuesDef) (map[ValueID]interface{}, error) {
+func (d *Device) requestValues(ctx context.Context, def InverterValuesDef) (map[ValueID]interface{}, error) {
 	Log.Printf("requestValues for %s: 0x%X 0x%X 0x%X", d.address, def.Object, def.Start, def.End)
 	request := net2.NewDeviceData(0xa0)
 	request.Object = def.Object
 	request.AddParameter(def.Start)
 	request.AddParameter(def.End)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	response, err := d.sendDeviceDataResponse(request, time.Millisecond*500, ctx)
-	cancel()
 	if err != nil {
 		return nil, err
 	}

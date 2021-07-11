@@ -41,7 +41,7 @@ func main() {
 			fmt.Printf("Serial:         %d\n", device.SerialNumber())
 			fmt.Printf("Is EnergyMeter: %v\n", device.IsEnergyMeter())
 			fmt.Printf("--------------------------------------------------\n")
-			name, err := device.GetDeviceName()
+			name, err := device.GetValue(sunny.DeviceName)
 			if err != nil {
 				fmt.Printf("ERROR: %v\n", err)
 			} else {
