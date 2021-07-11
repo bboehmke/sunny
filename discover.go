@@ -49,13 +49,14 @@ func (c *Connection) SimpleDiscoverDevices(password string) []*Device {
 
 // DiscoverDevices in Connection
 func (c *Connection) DiscoverDevices(ctx context.Context, devices chan *Device, password string) {
-	c.discoverMutex.Lock()
-	defer c.discoverMutex.Unlock()
-
 	var wg sync.WaitGroup
 	knownIps := make(map[string]*Device)
 	var knownMutex sync.Mutex
 	ticker := time.NewTicker(time.Millisecond * 500)
+
+	discoverCh := make(chan string)
+	c.registerDiscoverer(discoverCh)
+	defer c.unregisterDiscoverer(discoverCh)
 
 loop:
 	for {
@@ -64,7 +65,7 @@ loop:
 			break loop
 
 		// handle received responses
-		case ip := <-c.discoveredDevices:
+		case ip := <-discoverCh:
 			wg.Add(1)
 			go func(ip string) {
 				knownMutex.Lock()

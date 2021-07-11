@@ -37,6 +37,9 @@ type Device struct {
 	// device information
 	energyMeter bool
 	id          net2.DeviceId
+
+	// receiver channel for received package with IP of this device
+	receiver chan *proto.Packet
 }
 
 // NewDevice creates a new device instance
@@ -44,6 +47,7 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	device := Device{
 		conn:     c,
 		password: password,
+		receiver: make(chan *proto.Packet, 2),
 	}
 
 	var err error
@@ -52,8 +56,8 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 		return nil, fmt.Errorf("failed to resolve udp address: %w", err)
 	}
 
-	// clear message buffer
-	device.conn.clearReceived(device.address)
+	// register receiver channel for this device
+	c.registerReceiver(address, device.receiver)
 
 	// send ping
 	pingData := net2.NewDeviceData(0xa0)
@@ -99,6 +103,11 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	}
 }
 
+// Close unregister receiver channel
+func (d *Device) Close() {
+	d.conn.unregisterReceiver(d.address.IP.String(), d.receiver)
+}
+
 // SetPassword for device communication
 func (d *Device) SetPassword(pw string) {
 	d.password = pw
@@ -126,7 +135,7 @@ func (d *Device) GetDeviceClass() (uint32, error) {
 	}
 
 	// clear queue -> get fresh data
-	d.conn.clearReceived(d.address)
+	d.clearReceiver()
 
 	err := d.loginRetry(3)
 	if err != nil {
@@ -152,7 +161,7 @@ func (d *Device) GetDeviceName() (string, error) {
 	}
 
 	// clear queue -> get fresh data
-	d.conn.clearReceived(d.address)
+	d.clearReceiver()
 
 	err := d.loginRetry(3)
 	if err != nil {
@@ -174,7 +183,7 @@ func (d *Device) GetDeviceName() (string, error) {
 // GetValues from device
 func (d *Device) GetValues() (map[ValueID]interface{}, error) {
 	// clear queue -> get fresh data
-	d.conn.clearReceived(d.address)
+	d.clearReceiver()
 
 	if d.energyMeter {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
@@ -377,8 +386,10 @@ func (d *Device) sendDeviceData(data *net2.DeviceData) error {
 
 // readNet2 read package from Connection
 func (d *Device) readNet2(ctx context.Context) (*proto.SmaNet2PacketEntry, error) {
-	packet := d.conn.readPacket(d.address, ctx)
-	if packet == nil {
+	var packet *proto.Packet
+	select {
+	case packet = <-d.receiver:
+	case <-ctx.Done():
 		return nil, fmt.Errorf("device does not respond at %s", d.address.IP.String())
 	}
 
@@ -407,4 +418,15 @@ func (d *Device) readNet2DeviceData(ctx context.Context, pkgId uint16) (*net2.De
 	}
 
 	return responseData, nil
+}
+
+// clearReceiver channel packages
+func (d *Device) clearReceiver() {
+	for {
+		select {
+		case <-d.receiver:
+		default:
+			return
+		}
+	}
 }

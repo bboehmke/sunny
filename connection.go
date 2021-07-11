@@ -15,11 +15,9 @@
 package sunny
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	"gitlab.com/bboehmke/sunny/proto"
 )
@@ -31,19 +29,18 @@ var connections = make(map[string]*Connection)
 
 // Connection for communication with devices
 type Connection struct {
-	mutex sync.RWMutex
-
 	// multicast address
 	address *net.UDPAddr
 	// multicast socket
 	socket *net.UDPConn
 
 	// buffer for received packet
-	receivedBuffer map[string]chan *proto.Packet
+	receiverMutex    sync.RWMutex
+	receiverChannels map[string][]chan *proto.Packet
 
 	// interface for device discovery
-	discoverMutex     sync.Mutex
-	discoveredDevices chan string
+	discoverMutex    sync.RWMutex
+	discoverChannels []chan string
 }
 
 // NewConnection creates a new Connection object and starts listening
@@ -57,8 +54,7 @@ func NewConnection(inf string) (*Connection, error) {
 	}
 
 	conn := Connection{
-		receivedBuffer:    make(map[string]chan *proto.Packet),
-		discoveredDevices: make(chan string, 5),
+		receiverChannels: make(map[string][]chan *proto.Packet),
 	}
 
 	var err error
@@ -103,50 +99,93 @@ func (c *Connection) listenLoop() {
 			continue
 		}
 
+		srcIP := src.IP.String()
 		var pack proto.Packet
 		err = pack.Read(b[:n])
 		if err != nil {
 			// invalid packet received -> retry
-			Log.Printf("received invalid package from %s: %v", src.IP.String(), err)
+			Log.Printf("received invalid package from %s: %v", srcIP, err)
 			continue
 		}
-		Log.Printf("received package from %s [%s]", src.IP.String(), pack)
+		Log.Printf("received package from %s [%s]", srcIP, pack)
 
-		// forward discover packages
+		c.handleDiscovered(srcIP)
+		c.handlePackets(srcIP, &pack)
+	}
+}
+
+// handlePackets and forward to receivers
+func (c *Connection) handlePackets(srcIp string, packet *proto.Packet) {
+	c.receiverMutex.RLock()
+	defer c.receiverMutex.RUnlock()
+
+	for _, ch := range c.receiverChannels[srcIp] {
 		select {
-		case c.discoveredDevices <- src.IP.String():
+		case ch <- packet:
 		default:
-		}
-
-		select {
-		case c.getRecvChannel(src) <- &pack:
-		case <-time.After(time.Millisecond):
 			// channel for received packets busy -> drop packet
 		}
 	}
 }
 
-// getRecvChannel returns the receive channel of this address
-func (c *Connection) getRecvChannel(address *net.UDPAddr) chan *proto.Packet {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+// registerReceiver channel for a specific IP
+func (c *Connection) registerReceiver(srcIp string, ch chan *proto.Packet) {
+	c.receiverMutex.Lock()
+	defer c.receiverMutex.Unlock()
 
-	srcIP := address.IP.String()
-	if _, ok := c.receivedBuffer[srcIP]; !ok {
-		c.receivedBuffer[srcIP] = make(chan *proto.Packet, 5)
-	}
-
-	return c.receivedBuffer[srcIP]
+	c.receiverChannels[srcIp] = append(c.receiverChannels[srcIp], ch)
 }
 
-// clearReceived packages of the given address
-func (c *Connection) clearReceived(address *net.UDPAddr) {
-	ch := c.getRecvChannel(address)
-	for {
+// unregisterReceiver channel for a specific IP
+func (c *Connection) unregisterReceiver(srcIp string, ch chan *proto.Packet) {
+	c.receiverMutex.Lock()
+	defer c.receiverMutex.Unlock()
+
+	receivers, ok := c.receiverChannels[srcIp]
+	if !ok {
+		return // IP not in in list -> no channel to unregister
+	}
+
+	c.receiverChannels[srcIp] = make([]chan *proto.Packet, len(receivers))
+	for i, receiver := range receivers {
+		if receiver != ch {
+			c.receiverChannels[srcIp][i] = receiver
+		}
+	}
+}
+
+// handleDiscovered devices and forward IP to registered channels
+func (c *Connection) handleDiscovered(srcIp string) {
+	c.discoverMutex.RLock()
+	defer c.discoverMutex.RUnlock()
+
+	for _, ch := range c.discoverChannels {
 		select {
-		case <-ch:
+		case ch <- srcIp:
 		default:
-			return
+			// channel for received packets busy -> drop packet
+		}
+	}
+}
+
+// registerDiscoverer channel to receive source IP of received device packages
+func (c *Connection) registerDiscoverer(ch chan string) {
+	c.discoverMutex.Lock()
+	defer c.discoverMutex.Unlock()
+
+	c.discoverChannels = append(c.discoverChannels, ch)
+}
+
+// unregisterDiscoverer channel
+func (c *Connection) unregisterDiscoverer(ch chan string) {
+	c.discoverMutex.Lock()
+	defer c.discoverMutex.Unlock()
+
+	discoverChannels := c.discoverChannels
+	c.discoverChannels = make([]chan string, len(discoverChannels))
+	for i, entry := range discoverChannels {
+		if entry != ch {
+			c.discoverChannels[i] = entry
 		}
 	}
 }
@@ -159,16 +198,4 @@ func (c *Connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) erro
 		return fmt.Errorf("failed to send packet: %w", err)
 	}
 	return nil
-}
-
-// readPacket from received channel
-func (c *Connection) readPacket(address *net.UDPAddr, ctx context.Context) *proto.Packet {
-	ch := c.getRecvChannel(address)
-
-	select {
-	case pack := <-ch:
-		return pack
-	case <-ctx.Done():
-		return nil
-	}
 }
