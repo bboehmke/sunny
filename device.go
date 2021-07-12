@@ -343,7 +343,8 @@ func (d *Device) sendDeviceDataResponse(data *net2.DeviceData,
 		for {
 			select {
 			case <-receiveCtx.Done():
-				break
+				cancel()
+				return nil, fmt.Errorf("no packet received in timeout")
 			default:
 			}
 
