@@ -55,6 +55,8 @@ func (c *Connection) NewDevice(address, password string) (*Device, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve udp address: %w", err)
 	}
+	// update address with resolved IP (in case of DNS)
+	address = device.address.IP.String()
 
 	// register receiver channel for this device
 	c.registerReceiver(address, device.receiver)
