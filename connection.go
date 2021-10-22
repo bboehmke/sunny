@@ -104,10 +104,10 @@ func (c *Connection) listenLoop() {
 		err = pack.Read(b[:n])
 		if err != nil {
 			// invalid packet received -> retry
-			Log.Printf("received invalid package from %s: %v", srcIP, err)
+			Log.Printf("recv %s invalid: %v", srcIP, err)
 			continue
 		}
-		Log.Printf("received package from %s [%s]", srcIP, pack)
+		Log.Printf("recv %s: [%s]", srcIP, pack)
 
 		c.handleDiscovered(srcIP)
 		c.handlePackets(srcIP, &pack)
@@ -192,10 +192,10 @@ func (c *Connection) unregisterDiscoverer(ch chan string) {
 
 // sendPacket to the given address
 func (c *Connection) sendPacket(address *net.UDPAddr, packet *proto.Packet) error {
-	Log.Printf("send package to %s: [%s]", address.IP.String(), packet)
+	Log.Printf("send %s: [%s]", address.IP.String(), packet)
 	_, err := c.socket.WriteToUDP(packet.Bytes(), address)
 	if err != nil {
-		return fmt.Errorf("failed to send packet: %w", err)
+		return fmt.Errorf("send: %w", err)
 	}
 	return nil
 }
