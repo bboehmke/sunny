@@ -76,7 +76,7 @@ loop:
 					if err != nil {
 						Log.Printf("discover - skip ip %s: %v", ip, err)
 					} else {
-						Log.Printf("found device %s at %s", device.SerialNumber(), ip)
+						Log.Printf("found device %d at %s", device.SerialNumber(), ip)
 						knownIps[ip] = device
 						devices <- device
 					}
